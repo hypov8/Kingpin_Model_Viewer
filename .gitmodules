@@ -1,4 +1,4 @@
 [submodule "mxtk"]
 	path = mxtk
-	url = git@github.com:hypov8/mxtk.git
+	url = https://github.com/hypov8/mxtk.git
 
