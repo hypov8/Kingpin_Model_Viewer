@@ -43,8 +43,3 @@ http://www.milkshape3d.com/ms3d/
 ![UI1](/pics/kp_viewer_01.png)
 ![UI1](/pics/kp_viewer_02.png)
 ![UI1](/pics/kp_viewer_03.png)
-
-
-
-
-
