@@ -74,6 +74,7 @@ class GlWindow : public mxGlWindow
 	float d_rotX, d_rotY;
 	float d_transX, d_transY, d_transZ;
 	mdx_model_t *d_models[MAX_MODELS]; //6 models max
+	float d_modelOriginX, d_modelOriginZ; //rotate screen around model
 
 	//1->6 = model, 7 = background, 8 = water 
 	unsigned int d_textureNames[MAX_TEXTURES];	// index0 = texture 0
@@ -96,6 +97,7 @@ class GlWindow : public mxGlWindow
 	float d_gridColor[3]; //grid color
 	int d_debugLoad; //load invalid models
 	//int d_startMode; //startup switch
+	bool d_startPaused; //startup switch
 
 
 	float d_bias;
@@ -118,7 +120,7 @@ public:
 	virtual void draw ();
 
 	mdx_model_t *loadModel (const char *filename, int pos);
-	int loadTexture (const char *filename, int name);
+	int loadTexture (const char *filename, int pos);
 
 	void setRenderMode (int mode);
 	void setFrameInfo (int startFrame, int endFrame);

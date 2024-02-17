@@ -12,6 +12,7 @@
 //#include "common.h"
 //#endif
 
+#define KP_BUILD_VERSION "1.1.6.11"
 
 
 #define IDC_MODEL_LOADMODEL			1001
@@ -32,6 +33,7 @@
 #define IDC_MODEL_EXIT				1016
 #define IDC_MODEL_MD2				1017
 #define IDC_MODEL_SAVE				1018
+#define IDC_MODEL_LOAD_PMODEL		1019 //HYPOV8 OPEN MODEL FOLDER
 
 #define IDC_SKIN_MODELSKIN1			1021
 #define IDC_SKIN_MODELSKIN2			1022
@@ -45,17 +47,19 @@
 
 #define IDC_SKIN_RELOAD				1030 //HYPOV8
 #define IDC_SKIN_AVI				1031
+#define IDC_SKIN_UV					1032
 
 
-#define IDC_OPTIONS_BGCOLOR			1032
-#define IDC_OPTIONS_WFCOLOR			1033
-#define IDC_OPTIONS_FGCOLOR			1034
-#define IDC_OPTIONS_LIGHTCOLOR		1035
-#define IDC_OPTIONS_GRIDCOLOR		1036 //grid color
-#define IDC_OPTIONS_DEBUGCOLOR		1037 //vertex norms, hitbox
-#define IDC_OPTIONS_CENTERMODEL		1038
-#define IDC_OPTIONS_GEN_NORMALS		1039
-#define  IDC_OPTIONS_LOADINVALID	1040 //ignore header size
+#define IDC_OPTIONS_BGCOLOR			1033
+#define IDC_OPTIONS_WFCOLOR			1034
+#define IDC_OPTIONS_FGCOLOR			1035
+#define IDC_OPTIONS_LIGHTCOLOR		1036
+#define IDC_OPTIONS_GRIDCOLOR		1037 //grid color
+#define IDC_OPTIONS_DEBUGCOLOR		1038 //vertex norms, hitbox
+#define IDC_OPTIONS_CENTERMODEL1	1039
+#define IDC_OPTIONS_CENTERMODEL2	1040
+#define IDC_OPTIONS_GEN_NORMALS		1041
+#define  IDC_OPTIONS_LOADINVALID	1042 //ignore header size
 
 #define IDC_HELP_GOTOHOMEPAGE		1051
 #define IDC_HELP_ABOUT				1052
@@ -80,10 +84,10 @@
 #define IDC_INCFRAME				3007
 #define IDC_DECFRAME				3008
 #define IDC_1ST_PERSON				3009 //hypov8
-#define IDC_VERTEX					3010 //HYPOVERTEX vertex number input
-#define IDC_INCVERTEX				3011 //HYPOVERTEX increase
-#define IDC_DECVERTEX				3012 //HYPOVERTEX decrease
-#define IDC_VERT_USEFACE			3013 //HYPOVERTEX decrease
+#define IDC_VERTEX_SET				3010 //HYPOVERTEX vertex number input
+#define IDC_VERTEX_NEXT				3011 //HYPOVERTEX increase FRAME
+#define IDC_VERTEX_PREV				3012 //HYPOVERTEX decrease FRAME
+#define IDC_VERT_USEFACE			3013 //HYPOVERTEX switch modes
 
 #define MAX_MODELS 6 //HYPOV8
 #define MAX_TEXTURES 6+2 //1->6 = model, 7 = background, 8 = water 
@@ -109,19 +113,26 @@ class MDXViewer : public mxWindow
 	mxChoice *cRenderMode;
 	mxCheckBox *cbWater, *cbLight, *cbBackground, *cbInterp;
 
-	mxChoice *cAnim;
-	mxButton *bPause;
-	mxLineEdit *leFrame;
+	mxChoice *cAnim; //dropdown animation sets
+	mxButton *bPause; //button pause
+	mxLineEdit *leFrame; //inputbox current frame
 	mxLineEdit *leVertex; //HYPOVERTEX //hypov8 showVertex
-	mxButton *bDecFrame, *bIncFrame, *bSetFrame, *b1sPerson; //hypov8 b1sPerson
+	mxButton *bDecFrame; //button decrease frame num
+	mxButton *bIncFrame;  //button increase frame num
+	mxButton *bSetFrame; //button set  frame num
+	mxButton *b1sPerson; //button 1sPerson
+	mxButton *bCamToGrid; //button cam to grid
+	mxButton *bCamToModel; //button to model mid section
+
 	mxButton *bDecVertID, *bIncVertID, *bSetVertID; //HYPOVERTEX //hypov8 showVertex
+	mxCheckBox *cbVertUseFace; //HYPOVERTEX
 
 	mxLabel *lModelInfo1;
 	mxLabel *lModelInfo2; //hypov8 bbox
 	mxLabel *lModelInfo3; //mesh name
 	mxLabel *lModelInfo4; //HYPOVERTEX
-	mxCheckBox *cbVertUseFace; //HYPOVERTEX
-
+	mxLabel *lAnimSpeed; //speed
+	
 	mxLineEdit *leWidth, *leHeight;
 	mxCheckBox *cb3dfxOpenGL, *cbCDS;
 
@@ -136,12 +147,12 @@ class MDXViewer : public mxWindow
 	void initRecentFiles ();
 
 	bool loadModel (const char *ptr, int pos);
-	void setModelInfo (mdx_model_t *model, int pos);
+	void setModelInfo(); // mdx_model_t *model, int pos);
 	void initAnimation (mdx_model_t *model, int animation);
 	void initAVIAnimation (mdx_model_t *model, int animation, int *start, int *end);
 	int MakeAVI(int start, int end);
 
-
+	//void ProcessArgs(int argc, char *argv[]);
 	
 public:
 	friend PAKViewer;
@@ -154,11 +165,15 @@ public:
 	virtual int handleEvent (mxEvent *event);
 	void redraw ();
 	void makeScreenShot (const char *filename);
+	void makeUVMapImage(const char *filename);
 	void setRenderMode (int index);
-	void centerModel ();
+	void centerModel (int frame, int pos2);
+
+	void setStartPaused(); //hypov8
 
 	void reset_modelData(); //hypov8
-	void setPauseMode(); //hypov8
+	void setPauseMode(int frames); //hypov8
+	int importPlayerModelFolder(const char *ptr, int mode, int mIndex);
 	// ACCESSORS
 	mxMenuBar *getMenuBar () const { return UI_mb; }
 

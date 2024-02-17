@@ -10,13 +10,17 @@
 //static int g_glcmds = 1; /* use glcommands */
 static int g_interp = 1; /* interpolate frames */
 
+
 //md2 compat
 int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, int numFrames, int numVertices, int frameSize, float*min, float*max,
-	int offsetFrames, byte **framesBuffer)
+	int offsetFrames, byte **framesBuffer,
+	 boolean isModel_HD) //HD
 {
 	int i;
 	mdx_frame_t *frames;
 	char *v1, *v2;
+	byte *v16;
+
 
 	*pFrames = (mdx_frame_t *)calloc(numFrames, sizeof(mdx_frame_t));
 	if (!pFrames)
@@ -36,18 +40,44 @@ int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, int numFr
 		mdx_alias_frame_t *frame = (mdx_alias_frame_t *)buffer;
 		int j, nIdx;
 		char *fName = frames[i].name;
+		float fScale[3];
+
 		fread(frame, 1, frameSize, file);
 		memcpy(fName, frame->name, sizeof(frame->name)); //todo: null terminated?
 		frames[i].vertices = (mdx_triangleVertex_t *)malloc(sizeof(mdx_triangleVertex_t) * numVertices);
 		if (!frames[i].vertices)
 			return 0;
 
+		fScale[0] = frame->scale[0];
+		fScale[1] = frame->scale[1];
+		fScale[2] = frame->scale[2];
+		if (isModel_HD == TRUE)//def KINGPIN_MDX_V5
+		{
+			v16 = (byte*)((byte*)frame->alias_vertices + numVertices * 4);
+		}
+
 		for (j = 0; j < numVertices; j++)
 		{
-			//copy vertex
-			frames[i].vertices[j].vertex[2] = ((float)((int)frame->alias_vertices[j].vertex[0]) * frame->scale[0] + frame->translate[0]);
-			frames[i].vertices[j].vertex[0] = ((float)((int)frame->alias_vertices[j].vertex[1]) * frame->scale[1] + frame->translate[1]);
-			frames[i].vertices[j].vertex[1] = ((float)((int)frame->alias_vertices[j].vertex[2]) * frame->scale[2] + frame->translate[2]);
+			int v[3];
+			v[0] = (int)frame->alias_vertices[j].vertex[0];
+			v[1] = (int)frame->alias_vertices[j].vertex[1];
+			v[2] = (int)frame->alias_vertices[j].vertex[2];
+
+			if (isModel_HD == TRUE)//def KINGPIN_MDX_V5
+			{		
+				//copy vertex
+				frames[i].vertices[j].vertex[2] = ((float)v[0]+((float)(char)v16[0] /256.0f)) * fScale[0] + frame->translate[0];
+				frames[i].vertices[j].vertex[0] = ((float)v[1]+((float)(char)v16[1] /256.0f)) * fScale[1] + frame->translate[1];
+				frames[i].vertices[j].vertex[1] = ((float)v[2]+((float)(char)v16[2] /256.0f)) * fScale[2] + frame->translate[2]; //z-far
+				v16 += 3;
+			}
+			else
+			{
+				//copy vertex
+				frames[i].vertices[j].vertex[2] = (float)v[0] * fScale[0] + frame->translate[0];
+				frames[i].vertices[j].vertex[0] = (float)v[1] * fScale[1] + frame->translate[1];
+				frames[i].vertices[j].vertex[1] = (float)v[2] * fScale[2] + frame->translate[2]; //z-far
+			}
 
 			//copy normal
 			nIdx = frame->alias_vertices[j].lightNormalIndex;
@@ -90,20 +120,20 @@ mdx_readModel (const char *filename, int debugLoad)
 {
 	FILE *file=NULL;
 	mdx_model_t *model;
-	byte buffer[MDX_MAX_FRAMESIZE];
+	byte *buffer; // [MDL_MAX_FRAMESIZE];
 	long fLen;
-
+	boolean isModel_HD = FALSE;//def KINGPIN_MDX_V5
 
 	model = (mdx_model_t *)malloc(sizeof(mdx_model_t));
 	if (!model)
 		return 0;
-
 
 	if (fopen_s(&file,filename, "rb"))
 	{
 		free (model);
 		return 0;
 	}
+
 
 	//g_glcmds = 0; /* use glcommands */
 	//g_interp = 1; /* interpolate frames */
@@ -181,15 +211,31 @@ mdx_readModel (const char *filename, int debugLoad)
 		//	fread (&model->triangles[i], sizeof (mdx_triangle_t), 1, file);
 	}
 
+	//def KINGPIN_MDX_V5
+	if (model->header.frameSize == (int)(40 + model->header.numVertices*4 + model->header.numVertices*3))
+		isModel_HD = TRUE;
+
+	//hypov8 moved to dynamic buffer. no model size limit
+	buffer = malloc(sizeof(mdx_alias_frame_t) + sizeof(mdx_alias_triangleVertex_t)*model->header.numVertices+ 
+		sizeof(byte)*model->header.numVertices*3);	//def KINGPIN_MDX_V5
+	if (!buffer)
+	{
+		fclose(file); //hypov8
+		mdx_freeModel (model);
+		return 0;
+	}
+
 	/* read alias frames */
 	fseek (file, model->header.offsetFrames, SEEK_SET);
 	if (model->header.numFrames > 0)
 	{
 		if (!mdx_readFrameData(file, &model->frames, buffer, model->header.numFrames, model->header.numVertices, 
-			model->header.frameSize, model->min, model->max, model->header.offsetFrames, &model->framesBuffer))
+			model->header.frameSize, model->bBoxMin, model->bBoxMax, model->header.offsetFrames, &model->framesBuffer, 
+			isModel_HD)) //HD
 		{
 			fclose(file); //hypov8
 			mdx_freeModel (model);
+			free(buffer); //def KINGPIN_MDX_V5
 			return 0;
 		}
 	}
@@ -203,6 +249,7 @@ mdx_readModel (const char *filename, int debugLoad)
 		{
 			fclose(file); //hypov8
 			mdx_freeModel (model);
+			free(buffer); //def KINGPIN_MDX_V5
 			return 0;
 		}
 
@@ -218,12 +265,15 @@ mdx_readModel (const char *filename, int debugLoad)
 		{
 			fclose(file); //hypov8
 			mdx_freeModel(model);
+			free(buffer); //def KINGPIN_MDX_V5
 			return 0;
 		}
 		fread(model->hitBox, sizeof(float)*6, model->header.numFrames*model->header.numSubObjects, file);
 	}
 
 	fclose (file);
+
+	free(buffer); //def KINGPIN_MDX_V5
 
 	model->isMD2 = 0;
 
@@ -290,11 +340,14 @@ mdx_setStyle (int glcmds, int interp)
  *
  */
 void
-mdx_getBoundingBox (mdx_model_t *model, float *minmax, int frame)
+mdx_getBoundingBox (mdx_model_t *model, float *outMin, float *outMax, int frame)
 {
 #if 1
 	int i, j;
 	float min[3], max[3];
+
+	if (frame >= model->header.numFrames)
+		frame = model->header.numFrames - 1;
 	 
 	min[0] = min[1] = min[2] =  999999.0f;
 	max[0] = max[1] = max[2] = -999999.0f;
@@ -312,24 +365,23 @@ mdx_getBoundingBox (mdx_model_t *model, float *minmax, int frame)
 				max[j] = v->vertex[j];
 
 			//hypov8 properly centre model
-			if (j !=1) //dont centre vertical (z is fov)
+			/*if (j !=1) //dont centre vertical (z is fov)
 			{
 				if (-v->vertex[j] < min[j])
 					min[j] = -v->vertex[j];
 				else if (-v->vertex[j] > max[j])
 					max[j] = -v->vertex[j];
-			}
+			}*/
+
 		}
-
 	}
-	minmax[0] = min[0];
-	minmax[1] = max[0];
+	outMin[0] = min[0];
+	outMin[1] = min[1];
+	outMin[2] = min[2];
 
-	minmax[2] = min[1];
-	minmax[3] = max[1];
-
-	minmax[4] = min[2];
-	minmax[5] = max[2];
+	outMax[0] = max[0];
+	outMax[1] = max[1];
+	outMax[2] = max[2];
 #else
 	int i;
 	float minx, maxx;

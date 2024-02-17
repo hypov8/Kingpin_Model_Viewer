@@ -13,7 +13,6 @@
 //#include "anorms.h"
 
 
-
 /*
  * load model
  */
@@ -21,8 +20,9 @@ md2_model_t* md2_readModel (const char *filename, int debugLoad)
 {
 	FILE *file=NULL;
 	md2_model_t *model;
-	byte buffer[MD2_MAX_FRAMESIZE];
+	byte *buffer; // [MDL_MAX_FRAMESIZE];
 	long fLen;
+	boolean isModel_HD = FALSE;//def KINGPIN_MDX_V5
 
 	model = (md2_model_t *) malloc (sizeof (md2_model_t));
 	if (!model)
@@ -131,15 +131,31 @@ md2_model_t* md2_readModel (const char *filename, int debugLoad)
 		//	fread (&model->triangles[i], sizeof (md2_triangle_t), 1, file);
 	}
 
+	//def KINGPIN_MDX_V5
+	if (model->header.frameSize == (int)(40 + model->header.numVertices * 4 + model->header.numVertices * 3))
+		isModel_HD = TRUE;
+
+	//hypov8 moved to dynamic buffer. no model size limit
+	buffer = malloc(sizeof(mdx_alias_frame_t) + sizeof(mdx_alias_triangleVertex_t)*model->header.numVertices +
+		sizeof(byte)*model->header.numVertices * 3);	//def KINGPIN_MDX_V5
+	if (!buffer)
+	{
+		fclose(file); //hypov8
+		md2_freeModel(model);
+		return 0;
+	}
+
 	/* read alias frames */
 	fseek (file, model->header.offsetFrames, SEEK_SET);
 	if (model->header.numFrames > 0)
 	{
 		if (!mdx_readFrameData(file, &model->frames, buffer, model->header.numFrames, model->header.numVertices,
-			 model->header.frameSize, model->min, model->max, model->header.offsetFrames, &model->framesBuffer))
+			 model->header.frameSize, model->bBoxMin, model->bBoxMax, model->header.offsetFrames, &model->framesBuffer,
+			isModel_HD))
 		{
 			fclose(file); //hypov8
 			md2_freeModel(model);
+			free(buffer); //def KINGPIN_MDX_V5
 			return 0;
 		}
 	}
@@ -154,12 +170,15 @@ md2_model_t* md2_readModel (const char *filename, int debugLoad)
 		{
 			fclose(file);
 			md2_freeModel (model);
+			free(buffer); //def KINGPIN_MDX_V5
 			return 0;
 		}
 		fread (model->glCommandBuffer, sizeof (int), model->header.numGlCommands, file);
 	}
 
 	fclose (file);
+
+	free(buffer); //def KINGPIN_MDX_V5
 
 	return model;
 }
@@ -189,8 +208,8 @@ mdx_model_t * md2_Parse_readModel(const char * filename, int debugLoad)
 	mdxOut->header.numGlCommands = md2Src->header.numGlCommands;
 	mdxOut->header.numFrames = md2Src->header.numFrames;
 
-	memcpy(mdxOut->min, md2Src->min, sizeof(float) * 3);
-	memcpy(mdxOut->max, md2Src->max, sizeof(float) * 3);
+	memcpy(mdxOut->bBoxMin, md2Src->bBoxMin, sizeof(float) * 3);
+	memcpy(mdxOut->bBoxMax, md2Src->bBoxMax, sizeof(float) * 3);
 
 	//skins
 	mdxOut->skins = (mdx_skin_t *)malloc(sizeof(mdx_skin_t)*md2Src->header.numSkins);

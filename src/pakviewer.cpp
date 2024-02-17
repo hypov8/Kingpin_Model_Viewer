@@ -280,12 +280,11 @@ PAKViewer::OnLoadModel (int pos)
 		if (pos == TEXTURE_MODEL_0)
 		{
 			g_mdxViewer->initAnimation(model, -1);
-			//g_mdxViewer->setModelInfo(model, pos);
-			g_mdxViewer->centerModel(); //hypov8 add
-			if (model->header.numFrames == 1)
-				g_mdxViewer->setPauseMode();
+			g_mdxViewer->centerModel(0, 0); //hypov8 add
+			//if (model->header.numFrames == 1)
+			g_mdxViewer->setPauseMode(model->header.numFrames);
 		}
-		g_mdxViewer->setModelInfo (model, pos);
+		//g_mdxViewer->setModelInfo (model, pos);
 
 		// try to load skin
 		if (model->header.numSkins > 0)
@@ -314,7 +313,9 @@ PAKViewer::OnLoadModel (int pos)
 		}
 
 		if (pos == 0)
-			g_mdxViewer->centerModel ();
+			g_mdxViewer->centerModel (0, 0);
+
+		g_mdxViewer->setModelInfo();//moved down
 
 		g_mdxViewer->glw->redraw ();
 	}
@@ -356,6 +357,7 @@ PAKViewer::OnLoadTexture (int pos, bool isTarga)
 			g_mdxViewer->cbWater->setChecked (true);
 			g_mdxViewer->glw->setFlag (F_WATER, true);
 		}
+		g_mdxViewer->setModelInfo();
 		g_mdxViewer->glw->redraw ();
 	}
 	else
@@ -516,6 +518,7 @@ PAKViewer::openPAKFile (const char *pakFile)
 
 	delete[] lumps;
 
+	setVisible(1);
 	return true;
 }
 

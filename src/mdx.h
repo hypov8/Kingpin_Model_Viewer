@@ -1,13 +1,6 @@
 #ifndef INCLUDED_MDX
 #define INCLUDED_MDX
 
-#define MDX_MAX_TRIANGLES		4096
-#define MDX_MAX_VERTICES		2048
-#define MDX_MAX_FRAMES			1028
-#define MDX_MAX_SKINS			32
-#define MDX_MAX_FRAMESIZE		(MDX_MAX_VERTICES * 4 + 128)
-
-
 typedef struct 
 { 
    int magic; 
@@ -89,8 +82,8 @@ typedef struct
 	byte					*framesBuffer;
 	int						*glCommandBuffer;
 	int						isMD2;
-	float					min[3];
-	float					max[3];
+	float					bBoxMin[3];
+	float					bBoxMax[3];
 	float					*hitBox;
 } mdx_model_t;
 
@@ -101,7 +94,7 @@ extern "C" {
 mdx_model_t *mdx_readModel (const char *filename, int debugLoad);
 void mdx_freeModel (mdx_model_t *model);
 void mdx_setStyle (int glcmds, int interp);
-void mdx_getBoundingBox (mdx_model_t *model, float *minmax, int frame);
+void mdx_getBoundingBox (mdx_model_t *model, float *outMin, float *outMax, int frame);
 void mdx_getBoundingBoxExport (mdx_model_t *model, float *minmax, int frame);
 void mdx_drawModel (mdx_model_t *model, int frame1, int frame2, float pol, int noLerp, int isMissingFrame);
 //void mdx_drawModel_gl (mdx_model_t *model, int frame1, int isMissingFrame); //hypov8 add: render models without animations
@@ -116,7 +109,8 @@ void mdx_normalize(float *n);
 
 //HYPOVERTEX
 void mdx_drawModel_dev(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int vertID, int useFace, int showVN, int showGrid, int showBBox, float *rgb, float *grid_rgb);
-int mdx_readFrameData(FILE *file, mdx_frame_t **frames, byte *buffer, int numFrames, int numVertices, int frameSize, float*min, float*max, int offsetFrames, byte **framesBuffer);
+int mdx_readFrameData(FILE *file, mdx_frame_t **frames, byte *buffer, int numFrames, int numVertices, int frameSize, float*min, float*max, int offsetFrames, byte **framesBuffer
+	,boolean isModel_HD); //HD
 //END
 
 #ifdef __cplusplus

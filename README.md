@@ -32,12 +32,14 @@ http://www.milkshape3d.com/ms3d/
 - background image can be removed with setting color
 - loading 6 models with startup string
 - added startup switch. 
-    `-0`=stat wireframe
-    `-1`=start flat shade
-    `-2`=smooth shaded
-    `-3`=start textured
+  -  `-0`=stat wireframe
+  -  `-1`=start flat shade
+  -  `-2`=smooth shaded
+  -  `-3`=start textured
 
-
+#version 1.1.6.11
+- Updated HD model support
+- Fixed crash for large models. Added dynamic memory for frame buffer
 
 
 ![UI1](/pics/kp_viewer_01.png)

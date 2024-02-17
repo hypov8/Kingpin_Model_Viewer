@@ -14,6 +14,8 @@
 //#include "mdx.h"
 //#include "md2.h"
 
+#include <math.h> //sin/cos
+
 
 //char modelFileNames[MAX_MODELS][256]; //hypov8 models
 //char modelTexNames[MAX_TEXTURES][256]; //hypov8 textures
@@ -55,7 +57,7 @@ GlWindow::GlWindow (mxWindow *parent, int x, int y, int w, int h, const char *la
 	setFlag (F_PAUSE, false); //hypov8
 	setFlag (F_BACKGROUND, false);
 	setFlag (F_VNORMS, false); //hypov8
-	setFlag (F_GRID, false); //hypov8
+	setFlag (F_GRID, true); //hypov8
 	setFlag (F_HITBOX, false); //hypov8
 
 	setPitch (125.0f);
@@ -145,8 +147,35 @@ GlWindow::handleEvent (mxEvent *event)
 		{
 			if (event->modifiers & mxEvent::KeyShift)
 			{
+#if 0
 				d_transX = oldtx - (float) (event->x - oldx);
 				d_transY = oldty + (float) (event->y - oldy);
+
+#else
+				/*float radAngle = -radians(degree);// "-" - clockwise
+				float x = point.x;
+				float y = point.y;
+				float rX = pivot.x + (x - pivot.x) * cos(radAngle) - (y - pivot.y) * sin(radAngle);
+				float rY = pivot.y + (x - pivot.x) * sin(radAngle) + (y - pivot.y) * cos(radAngle);*/
+				
+				float rotX = (float)(event->x - oldx)/180;
+				float s = (float)sin(rotX);
+				float c = (float)cos(rotX);
+				float modelX = d_modelOriginX;
+				float modelY = d_modelOriginZ;
+				float cameraX = (float)oldtx;
+				float cameraY = (float)oldtz;
+
+				float rotatedX = (float)cos(rotX) * (cameraX - modelX) - (float)sin(rotX) * (cameraY - modelY) + modelX;
+				float rotatedZ = (float)sin(rotX) * (cameraX - modelX) + (float)cos(rotX) * (cameraY - modelY) + modelY;
+
+				d_transX = rotatedX;
+				d_transZ = rotatedZ;
+
+				//d_rotX = oldrx + (float) (event->y - oldy);
+				//d_rotY = oldry + (float) (event->x - oldx);
+				//}
+#endif
 			}
 			else
 			{
@@ -267,11 +296,12 @@ GlWindow::draw ()
 
 	glMatrixMode (GL_PROJECTION);
 	glLoadIdentity ();
-	gluPerspective (65.0f, (GLfloat) w () / (GLfloat) h (), 1.0f, 1024.0f); //hypov8 todo: increase for heli?
+	gluPerspective (65.0f, (GLfloat) w () / (GLfloat) h (), 1.0f, 2048.0f); //hypov8 todo: increase for heli?
 
 	glMatrixMode (GL_MODELVIEW);
 	glPushMatrix ();
-
+	//gluLookAt(-10, 0, 0, 0, 0, 0, 0, 1, 0);
+	//gluLookAt(d_transX, d_transY, d_transZ, 100, 20, 20, 1, 0, 0);//hypo
 	glLoadIdentity ();
 
 	if (getFlag (F_LIGHT))
@@ -295,6 +325,8 @@ GlWindow::draw ()
 	glPixelTransferf (GL_RED_BIAS, 99.0f);
 	glPixelTransferf (GL_GREEN_BIAS, 99.0f);
 	glPixelTransferf (GL_BLUE_BIAS, 99.0f);*/
+
+	//gluLookAt(-d_transX, -d_transY, -d_transZ, 100, 0, 0, 1, 0, 0);
 
 	glTranslatef (-d_transX, -d_transY, -d_transZ);
 
@@ -605,6 +637,9 @@ GlWindow::loadTexture (const char *filename, int imgIndex)
 	else if (!mx_strcasecmp(ext, ".tga"))
 		image = mxTgaRead(filename);
 
+	//todo fallback?
+
+
 	if (image)
 	{
 		byte *out = NULL;
@@ -648,6 +683,9 @@ GlWindow::loadTexture (const char *filename, int imgIndex)
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		if (out) free(out);
+
+		// setm loadTexture(glw->modelTexNames[pos], pos);
+		//g_mdxViewer->glw->setModelInfo(model, pos);
 
 		delete image;
 		return imgIndex+1;

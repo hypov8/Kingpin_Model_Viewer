@@ -39,12 +39,20 @@
 // - fixed lerp counter going negative (DWORD)
 // - updated to latest mxtk from github (+added kingpin file support)
 // - background image can be removed with setting color
+// - removed pakview, until needed.
+// - fix md2 export bug. glCommands buffer overflow
 // - loading 6 models with startup string
 // - added startup switch. 
 // - 	'-0'=stat wireframe
 // - 	'-1'=start flat shade
 // - 	'-2'=smooth shaded
 // - 	'-3'=start textured
+// -	'-p'=pause
+// - aded high deff suport
+
+//version 1.1.6.11
+// - Updated HD model support
+// - Fixed crash for large models. Added dynamic memory for frame buffer
 
 //todo 
 //framerate limit (currently set to 60)
@@ -60,6 +68,8 @@ MDXViewer *g_mdxViewer = 0;
 char loadmod[6][256];
 
 int d_startMode = 0; //hypov8 todo: c++ way?
+bool  d_startPaused = 0; //local
+char d_recentPath[MAX_PATH] = {'\0'};
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,11 +81,11 @@ int SaveAsMD_(const char *filename, mdx_model_t *model);
 
 static char recentFiles[8][256] = { "", "", "", "", "", "", "", "" };
 
-long Skins=0;
+/*long Skins=0;
 long Vertices=0;
 long Triangles=0;
 long GlCommands=0;
-long Frames=0;
+long Frames=0;*/
 //HYPOVERTEX
 //int uiVertexID = -1;
 
@@ -154,7 +164,7 @@ MDXViewer::saveRecentFiles ()
 
 
 MDXViewer::MDXViewer ()
-: mxWindow (0, 0, 0, 0, 0, "Kingpin Model Viewer 1.1.6(beta)", mxWindow::Normal) //hypov8 version
+: mxWindow (0, 0, 0, 0, 0, "Kingpin Model Viewer " KP_BUILD_VERSION "(beta)", mxWindow::Normal) //hypov8 version
 {
 	// create menu stuff
 	UI_mb = new mxMenuBar (this);
@@ -186,6 +196,7 @@ MDXViewer::MDXViewer ()
 
 	menuModel->add ("Load Model...", IDC_MODEL_LOADMODEL);
 	menuModel->add ("Merge Model...", IDC_MODEL_MERGEMODEL);
+	menuModel->add ("Load Player...", IDC_MODEL_LOAD_PMODEL);
 	//menuModel->add ("Unload Models", IDC_MODEL_UNLOADMODEL); //hypov8 not needed
 	menuModel->addSeparator ();
 	menuModel->addMenu ("Recent Models", menuRecentModels);
@@ -209,13 +220,13 @@ MDXViewer::MDXViewer ()
 	menuSkin->addSeparator ();
 	menuSkin->add("Reload all skins", IDC_SKIN_RELOAD);
 	menuSkin->addSeparator();
-
-	menuSkin->add ("Load Background Texture...", IDC_SKIN_BACKGROUND);
+		menuSkin->add ("Load Background Texture...", IDC_SKIN_BACKGROUND);
 	menuSkin->add ("Load Water Texture...", IDC_SKIN_WATER);
 #ifdef WIN32
 	menuSkin->addSeparator ();
 	menuSkin->add ("Make Screenshot...", IDC_SKIN_SCREENSHOT);	//hypov8 slow
 	//menuSkin->add ("Make AVI File...", IDC_SKIN_AVI);				//hypov8 buggy
+	//menuSkin->add("Make VU Map...", IDC_SKIN_UV);	//hypov8 todo
 #endif
 	menuOptions->add ("Background Color...", IDC_OPTIONS_BGCOLOR);
 	menuOptions->add ("Wireframe Color...", IDC_OPTIONS_WFCOLOR);
@@ -224,8 +235,9 @@ MDXViewer::MDXViewer ()
 	menuOptions->add ("Grid Color...", IDC_OPTIONS_GRIDCOLOR);
 	menuOptions->add ("Developer Color...", IDC_OPTIONS_DEBUGCOLOR);
 
-	menuOptions->addSeparator ();
-	menuOptions->add ("Center Model.", IDC_OPTIONS_CENTERMODEL);
+	/*menuOptions->addSeparator ();
+	menuOptions->add ("Center on Model.", IDC_OPTIONS_CENTERMODEL1);
+	menuOptions->add ("Center on Grid.", IDC_OPTIONS_CENTERMODEL2);*/ //moved to buttons
 	menuOptions->addSeparator ();
 	menuOptions->add ("Generate Light Normals.", IDC_OPTIONS_GEN_NORMALS);
 	menuOptions->addSeparator();
@@ -277,7 +289,7 @@ MDXViewer::MDXViewer ()
 	cbWater =					new mxCheckBox (wView, 5, 30, 50, 22, "Water", IDC_WATER);
 	cbLight =					new mxCheckBox (wView, 5, 55, 50, 22, "Light", IDC_LIGHT);
 	mxCheckBox *cbShininess =	new mxCheckBox (wView, 55, 55, 50, 22, "Shine", IDC_SHININESS);
-	cbBackground =				new mxCheckBox (wView, 110, 55, 80, 22, "Background", IDC_BACKGROUND);
+	cbBackground =				new mxCheckBox (wView, 110, 55, 78, 22, "Background", IDC_BACKGROUND);
 	mxCheckBox *cbGrid =		new mxCheckBox (wView, 5, 80, 50, 22, "Grid", IDC_GRID);
 	mxCheckBox *cbHitBox =		new mxCheckBox (wView, 55, 80, 50, 22, "HitBox", IDC_HITBOX);
 	mxCheckBox *cbVNorms =		new mxCheckBox (wView, 110, 80, 90, 22, "Vertex Normals", IDC_VERTNORMS);
@@ -285,7 +297,7 @@ MDXViewer::MDXViewer ()
 	cbLight->setChecked (false);
 	cbShininess->setChecked (false);
 	cbVNorms->setChecked (false);
-	cbGrid->setChecked (false);
+	cbGrid->setChecked (true);
 	cbHitBox->setChecked (false);
 
 
@@ -297,30 +309,27 @@ MDXViewer::MDXViewer ()
 	// Create widgets for the Animation
 	////////////////////////////////////
 	int ofT = 205; //ani alignment offset
-	cAnim = new mxChoice (wView, 5+ofT, 5, 170, 22, IDC_ANIMATION_SETS);
 
-	cbInterp = new mxCheckBox (wView, 5 + ofT, 29, 70, 22, "Interpolate", IDC_INTERPOLATE);
+	cAnim = new mxChoice (wView, 5+ofT, 5, 170, 22, IDC_ANIMATION_SETS); //dropdown
+	cbInterp = new mxCheckBox (wView, 5 + ofT, 30, 70, 22, "Interpolate", IDC_INTERPOLATE);
 	cbInterp->setChecked (true);
-
-	b1sPerson = new mxButton(wView, 95 + ofT, 31, 75, 20, "1st Person", IDC_1ST_PERSON); // button 1st person
-	b1sPerson->setEnabled(true);
-	mxToolTip::add(b1sPerson, "Set viewport to match ingame");
-
-	new mxLabel(wView, 5 + ofT, 55, 35, 22, "Speed");
-	mxSlider *slPitch = new mxSlider (wView, 40 + ofT, 55, 135, 22, IDC_PITCH); //slider
+	lAnimSpeed = new mxLabel(wView, 5 + ofT, 59, 75, 14, "Speed: 125");
+	mxSlider *slPitch = new mxSlider (wView, 5 + ofT, 77, 98, 22, IDC_PITCH); //slider
+	mxToolTip::add (slPitch, "Frame Animation Speed (Pitch)");
 	slPitch->setRange (1, 200);
 	slPitch->setValue (125);
-	mxToolTip::add (slPitch, "Frame Animation Speed (Pitch)");
+	
+	
 
 	///////////////////////////////////
 	// animation navigator
 	///////////////////////////////////
-	int ofT2 = 220;
-	bPause = new mxButton (wView, 181 + ofT2, 5, 77, 22, "Pause", IDC_PAUSE);
-	bDecFrame = new mxButton (wView, 181 + ofT2, 30, 20, 20, "<", IDC_DECFRAME);
-	leFrame = new mxLineEdit (wView, 202 + ofT2, 30, 35, 20, "0");
-	bIncFrame = new mxButton (wView, 238 + ofT2, 30, 20, 20, ">", IDC_INCFRAME);
-	bSetFrame = new mxButton (wView, 202 + ofT2, 51, 35, 20, "Set", IDC_BTN_SET_FRAME);
+	int ofT2 = 303;
+	bPause = new mxButton (wView, 0 + ofT2, 30, 77, 22, "Pause", IDC_PAUSE);
+	bDecFrame = new mxButton (wView, 0 + ofT2, 53, 20, 22, "<", IDC_DECFRAME);
+	leFrame = new mxLineEdit (wView, 21 + ofT2, 53, 35, 22, "0"); //21
+	bIncFrame = new mxButton (wView, 57 + ofT2, 53, 20, 22, ">", IDC_INCFRAME); //57
+	bSetFrame = new mxButton (wView, 21 + ofT2, 76, 35, 22, "Set", IDC_BTN_SET_FRAME);
 	bDecFrame->setEnabled (false);
 	leFrame->setEnabled (false);
 	bIncFrame->setEnabled (false);
@@ -331,27 +340,46 @@ MDXViewer::MDXViewer ()
 	mxToolTip::add (bIncFrame, "Increase Current Frame");
 
 
+
+	///////////////////////////////////
+	// camera buttons group
+	///////////////////////////////////
+	ofT = 390;
+	mxGroupBox * gbCamera = new mxGroupBox(wView, ofT, 0, 95, 100, "Camera");
+	b1sPerson = new mxButton(wView, 10 + ofT, 20, 75, 22, "1st Person", IDC_1ST_PERSON); // button 1st person
+	bCamToGrid = new mxButton(wView, 10 + ofT, 45, 75, 22, "Model", IDC_OPTIONS_CENTERMODEL2); // button 1st person
+	bCamToModel = new mxButton(wView, 10 + ofT, 70, 75, 22, "Reset", IDC_OPTIONS_CENTERMODEL1); // button 1st person
+	b1sPerson->setEnabled(true);
+	bCamToGrid->setEnabled(true);
+	bCamToModel->setEnabled(true);
+	mxToolTip::add(b1sPerson, "Set viewport to match ingame");
+	mxToolTip::add(bCamToGrid, "Set viewport to model centre");
+	mxToolTip::add(bCamToModel, "Set viewport to default view");
+
+
+
 	///////////////////////////////////////////
 	// Create widgets for the 'Model Info' Tab
 	///////////////////////////////////////////
 	int ofT3 = 140; //shift input group
-	lModelInfo1 = new mxLabel (wInfo, 5, 5, 150, 75, "No Model."); // model stats
-	lModelInfo2 = new mxLabel (wInfo, 150, 5, 150, 75, "");		// bbox
-	lModelInfo3 = new mxLabel (wInfo, 5, 80, 500, 22, "");			// model path
-	lModelInfo4 = new mxLabel (wInfo, 181 + ofT3, 5, 150, 22, "Find Vertex Index (0-Based)");
+	lModelInfo1 = new mxLabel (wInfo, 5, 5, 150, 70, "No Model."); // model stats
+	lModelInfo2 = new mxLabel (wInfo, 150, 5, 150, 70, "");		// bbox
+	lModelInfo3 = new mxLabel (wInfo, 5, 70, 500, 42, "");			// model path
 
 //HYPOVERTEX
 	// show vertex number
-	bSetVertID = new mxButton(wInfo, 202 + ofT3, 44, 35, 20, "Set", IDC_VERTEX);
-	bDecVertID = new mxButton(wInfo, 181 + ofT3, 24, 20, 20, "<", IDC_DECVERTEX);
-	leVertex = new mxLineEdit(wInfo, 202 + ofT3, 23, 35, 22, "-1");
-	bIncVertID = new mxButton(wInfo, 238 + ofT3, 24, 20, 20, ">", IDC_INCVERTEX);
+	ofT3 = 330; // 140; //shift input group
+	lModelInfo4 = new mxLabel (wInfo, 1 + ofT3, 5, 150, 22, "Find Vertex Index (0-Based)");
+	bDecVertID = new mxButton(wInfo, 1 + ofT3, 24, 20, 22, "<", IDC_VERTEX_PREV);
+	leVertex = new mxLineEdit(wInfo, 22 + ofT3, 23, 35, 22, "-1");
+	bIncVertID = new mxButton(wInfo, 58 + ofT3, 24, 20, 22, ">", IDC_VERTEX_NEXT);
+	bSetVertID = new mxButton(wInfo, 22 + ofT3, 46, 35, 22, "Set", IDC_VERTEX_SET);
 	bSetVertID->setEnabled(true);
 	leVertex->setEnabled (true);
 	bDecVertID->setEnabled(true);
 	bIncVertID->setEnabled(true);
-	mxCheckBox*
-	cbVertUseFace = new mxCheckBox(wInfo, 202 + ofT, 24, 70, 22, "Face?", IDC_VERT_USEFACE);
+	cbVertUseFace = new mxCheckBox(wInfo, 82 + ofT3, 24, 70, 22, "Face?", IDC_VERT_USEFACE);
+	cbVertUseFace->setEnabled(true);
 	mxToolTip::add(bSetFrame, "Set Current Vertex/Face");
 	mxToolTip::add (leVertex, "Current Vertex/Face");
 	mxToolTip::add(bDecVertID, "Previous Vertex/Face");
@@ -369,11 +397,13 @@ MDXViewer::MDXViewer ()
 
 	// finally create the pakviewer window
 	pakViewer = new PAKViewer (this);
+	pakViewer->setVisible(0);
 
 	loadRecentFiles ();
 	initRecentFiles ();
 
-	setBounds (20, 20, 690, 550);
+	//setBounds (20, 20, 690, 550);
+	setBounds (20, 20, 520, 550); //hidden pak
 	setVisible (true);
 
 	//hypov8 file->open with
@@ -408,12 +438,12 @@ MDXViewer::~MDXViewer ()
 void
 MDXViewer::reset_modelData(void)
 {
-	Skins = 0;
+	/*Skins = 0;
 	Vertices = 0;
 	Triangles = 0;
 	GlCommands = 0;
-	Frames = 0;
-	setModelInfo(0, TEXTURE_MODEL_0);
+	Frames = 0;*/
+
 	glw->loadModel(0, TEXTURE_MODEL_0);
 	glw->loadModel(0, TEXTURE_MODEL_1);
 	glw->loadModel(0, TEXTURE_MODEL_2);
@@ -427,7 +457,7 @@ MDXViewer::reset_modelData(void)
 	glw->loadTexture(0, TEXTURE_MODEL_3);
 	glw->loadTexture(0, TEXTURE_MODEL_4);
 	glw->loadTexture(0, TEXTURE_MODEL_5);
-
+	setModelInfo(); // 0, TEXTURE_MODEL_0);
 	glw->d_vertexIndex = -1; //HYPOVERTEX
 	glw->d_vertexUseFace = 0; //HYPOVERTEX
 
@@ -457,18 +487,19 @@ MDXViewer::reset_modelData(void)
 }
 
 void
-MDXViewer::setPauseMode(void)
+MDXViewer::setPauseMode(int frames)
 {
-	//stop model animate
-	glw->setFlag(F_PAUSE, 1);
-	bDecFrame->setEnabled(0);
-	leFrame->setEnabled(0);
-	bIncFrame->setEnabled(0);
-	bSetFrame->setEnabled(0);
-	bPause->setEnabled(0);
-	bPause->setLabel("No Frames");
-	cAnim->setEnabled(0);
-	cbInterp->setEnabled(0);
+	if (d_startPaused || frames == 1)
+		setStartPaused();
+
+	if (frames == 1)
+	{
+		bPause->setEnabled(0);
+		bPause->setLabel("No Frames");
+		cAnim->setEnabled(0);
+		cbInterp->setEnabled(0);
+	}
+
 }
 
 const char* 
@@ -516,6 +547,65 @@ MDXViewer::fileFilterString(int type, int multiType)
 	return out;
 }
 
+int
+MDXViewer::importPlayerModelFolder(const char *ptr, int mode, int mIndex)
+{
+	if (ptr)
+	{
+		int i;
+		char path[256];
+
+		if (mode == IDC_MODEL_LOADMODEL)
+		{
+			reset_modelData(); //hypov8
+			mIndex = 0;
+		}
+
+		if (!loadModel(ptr, mIndex))
+		{
+			char str[300];
+
+			sprintf_s(str, sizeof(str), "Error reading model: %s", ptr);
+			mxMessageBox(this, str, "ERROR", MX_MB_OK | MX_MB_ERROR);
+			return 0; // break;
+		}
+
+		// now update recent files list
+		strcpy_s(path, sizeof(path), "[m] ");
+		strcat_s(path, sizeof(path), ptr);
+		path[255] = 0; //hypov8 null
+
+		for (i = 0; i < 4; i++)
+		{
+			if (!_stricmp(recentFiles[i], path))
+				break;
+		}
+
+		// swap existing recent file
+		if (i < 4)
+		{
+			char tmp[256];
+			strcpy_s(tmp, 256, recentFiles[0]);
+			strcpy_s(recentFiles[0], 256, recentFiles[i]);
+			strcpy_s(recentFiles[i], 256, tmp);
+		}
+
+		// insert recent file
+		else
+		{
+			for (i = 3; i > 0; i--)
+				strcpy_s(recentFiles[i], 256, recentFiles[i - 1]);
+
+			strcpy_s(recentFiles[0], 256, path);
+		}
+
+		initRecentFiles();
+		return 1;
+	}
+	//else cancled?
+	return 0;
+
+}
 
 int
 MDXViewer::handleEvent (mxEvent *event)
@@ -529,6 +619,7 @@ MDXViewer::handleEvent (mxEvent *event)
 		{
 		case IDC_MODEL_LOADMODEL:
 		case IDC_MODEL_MERGEMODEL:
+
 		{
 			int mIndex = glw->getModelIndex();
 			if (mIndex < MAX_MODELS || event->action == IDC_MODEL_LOADMODEL)
@@ -536,6 +627,8 @@ MDXViewer::handleEvent (mxEvent *event)
 				const char *ptr = mxGetOpenFileName(this, 0, fileFilterString(FILE_TYPE_MDX, 1)); //.mdx
 				if (ptr)
 				{
+					int tmp = importPlayerModelFolder(ptr, event->action, mIndex);
+#if 0
 					int i;
 					char path[256];
 
@@ -585,6 +678,7 @@ MDXViewer::handleEvent (mxEvent *event)
 					}
 
 					initRecentFiles();
+#endif
 				}
 				//else cancled?
 			}
@@ -593,6 +687,47 @@ MDXViewer::handleEvent (mxEvent *event)
 				HWND hwID = (HWND)g_mdxViewer->getHandle();
 				//max models
 				MessageBox(hwID, "Limit of 6 models reached.\nUse \"Load Model\" instead ", "Note", MB_OK);
+			}
+		}
+		break;
+
+		case IDC_MODEL_LOAD_PMODEL:
+		{
+			//int mIndex = glw->getModelIndex();
+			//if (mIndex < MAX_MODELS || event->action == IDC_MODEL_LOADMODEL)
+			{
+				//if (d_recentPath[0] == '\0')
+				//	strcpy_s(d_recentPath, MAX_PATH, mx_getcwd()); // mx_getpath(mx::getApplicationPath()));
+
+				const char *ptr = mxGetFolderPath(this, mx_getcwd()); // d_recentPath);
+				if (ptr)
+				{
+					int idx = 0;
+					static char *mdlName[4] = { "head.mdx", "body.mdx", "legs.mdx", "w_tommygun.mdx" };
+					static char *skiName[4] = { "head_001.tga", "body_001.tga", "legs_001.tga", "0" }; //todo read .ini?
+
+					reset_modelData(); //hypov8
+
+					for (int i = 0; i < 4; i++)
+					{
+						char ptrFile[MAX_PATH];
+						sprintf_s(ptrFile, sizeof(ptrFile), "%s/%s", ptr, mdlName[i]);
+						if (importPlayerModelFolder((const char *)ptrFile, event->action, idx))
+						{
+							if (i < 3) {
+								sprintf_s(ptrFile, sizeof(ptrFile), "%s/%s", ptr, skiName[i]);
+								glw->loadTexture(ptrFile, idx);
+							}
+							idx += 1;
+						}
+						else
+							break;
+					}
+					mx_setcwd(ptr);
+					setModelInfo();
+					setRenderMode(3); //allow viewing skins
+					glw->redraw();
+				}
 			}
 		}
 		break;
@@ -653,6 +788,7 @@ MDXViewer::handleEvent (mxEvent *event)
 		case IDC_MODEL_CLOSEPAKFILE:
 		{
 			pakViewer->closePAKFile ();
+			pakViewer->setVisible(0);
 			redraw ();
 		}
 		break;
@@ -665,6 +801,9 @@ MDXViewer::handleEvent (mxEvent *event)
 			int i = event->action - IDC_MODEL_RECENTMODELS1;
 			bool isModel = recentFiles[i][1] == 'm';
 			char *ptr = &recentFiles[i][4];
+
+			if (isModel)
+				reset_modelData();
 
 			if (!loadModel (ptr, isModel ? 0:1))
 			{
@@ -746,19 +885,8 @@ MDXViewer::handleEvent (mxEvent *event)
 			const char *ptr = mxGetOpenFileName (this, 0, fileFilterString(FILE_TYPE_TGA, 1)); //*.tga then *.pcx
 			if (ptr)
 			{
-				if(event->action==IDC_SKIN_MODELSKIN1)
-					glw->loadTexture (ptr, TEXTURE_MODEL_0);
-				else if(event->action== IDC_SKIN_MODELSKIN2)
-					glw->loadTexture (ptr, TEXTURE_MODEL_1);
-				else if(event->action==IDC_SKIN_MODELSKIN3)
-					glw->loadTexture (ptr, TEXTURE_MODEL_2);
-				else if(event->action==IDC_SKIN_MODELSKIN4)
-					glw->loadTexture (ptr, TEXTURE_MODEL_3);
-				else if(event->action==IDC_SKIN_MODELSKIN5)
-					glw->loadTexture (ptr, TEXTURE_MODEL_4);
-				else if(event->action==IDC_SKIN_MODELSKIN6)
-					glw->loadTexture (ptr, TEXTURE_MODEL_5);
-				
+				glw->loadTexture(ptr, event->action - IDC_SKIN_MODELSKIN1); //TEXTURE_MODEL_0
+				setModelInfo();				
 				setRenderMode (3); //allow viewing skins
 				glw->redraw ();
 			}
@@ -808,17 +936,22 @@ MDXViewer::handleEvent (mxEvent *event)
 
 #ifdef WIN32
 		case IDC_SKIN_SCREENSHOT:
+		case IDC_SKIN_UV:
 		{
 			const char *ptr = mxGetSaveFileName(this, 0, fileFilterString(FILE_TYPE_TGA, 0)); //*.tga
 			if (ptr)
 			{
 				if(mx_strncasecmp(mx_getextension(ptr), ".tga", 4))
 					strcat_s((char *)ptr, _MAX_PATH,  ".tga");
-				makeScreenShot (ptr);
+				if (event->action == IDC_SKIN_UV)
+					makeUVMapImage (ptr);
+				else
+					makeScreenShot (ptr);
 			}
 		//	int test = MakeAVI();
 		}
 		break;
+
 		case IDC_SKIN_AVI:
 		{
 			int index = cAnim->getSelectedIndex ();
@@ -894,11 +1027,14 @@ MDXViewer::handleEvent (mxEvent *event)
 		}
 		break;
 
-		case IDC_OPTIONS_CENTERMODEL:
-		{
-			centerModel ();
+		case IDC_OPTIONS_CENTERMODEL1:
+			centerModel (glw->getCurrFrame(), 0);
 			glw->redraw ();
-		}
+		break;
+
+		case IDC_OPTIONS_CENTERMODEL2:
+			centerModel (glw->getCurrFrame(), 1);
+			glw->redraw ();
 		break;
 
 		case IDC_OPTIONS_GEN_NORMALS:
@@ -950,7 +1086,7 @@ MDXViewer::handleEvent (mxEvent *event)
 				"Build:\t" __DATE__ ".\n"
 				"Email:\thypov8@kingpin.info\n"
 				"Web:\thttp://Kingpin.info/",
-				"Kingpin Model Viewer 1.1.6 by Hypov8", //title //hypov8 version
+				"Kingpin Model Viewer " KP_BUILD_VERSION " by Hypov8", //title //hypov8 version
 				MX_MB_OK | MX_MB_INFORMATION);
 			break;
 
@@ -1046,8 +1182,14 @@ MDXViewer::handleEvent (mxEvent *event)
 			break;
 
 		case IDC_PITCH:
-			glw->setPitch (200 -(float) ((mxSlider *) event->widget)->getValue () ); //hypov8 UI: invert
-			break;
+		{
+			char str[32];
+			float speed = (float)((mxSlider *)event->widget)->getValue();
+			glw->setPitch(200 -speed); //hypov8 UI: invert
+			sprintf_s(str, sizeof(str), "Speed: %i", (int)(speed));
+			lAnimSpeed->setLabel(str);
+		}
+		break;
 
 		case IDC_PAUSE: // Pause/Play
 		{
@@ -1115,36 +1257,19 @@ MDXViewer::handleEvent (mxEvent *event)
 		break;
 
 		case IDC_DECFRAME:
-		{
-			int frame = glw->getCurrFrame () - 1;
-			glw->setFrameInfo (frame, frame);
-
-			char str[32];
-			sprintf_s (str, sizeof(str), "%d", glw->getCurrFrame ());
-			leFrame->setLabel (str);
-			glw->redraw ();
-		}
-		break;
-
 		case IDC_BTN_SET_FRAME:
-		{
-			const char *ptr = leFrame->getLabel ();
-			if (ptr)
-			{
-				int frame = atoi (ptr);
-				glw->setFrameInfo (frame, frame);
-
-				char str[32];
-				sprintf_s (str, sizeof(str), "%d", glw->getCurrFrame ());
-				leFrame->setLabel (str);
-				glw->redraw ();
-			}
-		}
-		break;
-
 		case IDC_INCFRAME:
 		{
-			int frame = glw->getCurrFrame () + 1;
+			const char *ptr = leFrame->getLabel ();
+			int frame = glw->getCurrFrame ();
+			if (ptr)
+				 frame = atoi (ptr);
+
+			if (event->action == IDC_INCFRAME)
+				frame += 1;
+			else if (event->action == IDC_DECFRAME)
+				frame -= 1;
+
 			glw->setFrameInfo (frame, frame);
 
 			char str[32];
@@ -1155,71 +1280,55 @@ MDXViewer::handleEvent (mxEvent *event)
 		break;
 
 		case IDC_1ST_PERSON:
-		{
-			//hypov8 set viewport to 1st person
+		{	//hypov8 set viewport to 1st person
 			glw->d_rotX =0;
 			glw->d_rotY =180;
 			glw->d_transX=0;
 			glw->d_transY=0;
 			glw->d_transZ=3; //move fov back slightly
-
 			glw->redraw ();
-			
 		}
 		break;
 
 //HYPOVERTEX
-		case IDC_DECVERTEX:
+		case IDC_VERTEX_NEXT:
+		case IDC_VERTEX_PREV:
+		case IDC_VERTEX_SET:
+		case IDC_VERT_USEFACE: //checkbox clicked
 		{
-			int cutVertID = atoi(leVertex->getLabel())-1;
-			if (cutVertID < -1)
-				cutVertID = -1;
-			glw->d_vertexIndex = cutVertID;
-			glw->redraw();
-
 			char str[32];
-			sprintf_s (str, sizeof(str), "%d", cutVertID);
-			leVertex->setLabel (str);
-		}
-		break;
-
-		case IDC_VERTEX:
-		{
-			int maxVF = ((mxCheckBox *)event->widget)->isChecked() ? MDX_MAX_TRIANGLES : MDX_MAX_VERTICES;
+			int maxIdx = -1;
 			int cutVertID = atoi(leVertex->getLabel());
+			int isFace = cbVertUseFace->isChecked();
+
+			mdx_model_t *model = glw->getModel(0);
+			if (model)
+			{
+				if (isFace)
+					maxIdx = glw->getModel(0)->header.numTriangles - 1; // : MDL_MAX_TRIANGLES;
+				else
+					maxIdx = glw->getModel(0)->header.numVertices - 1; // : MDL_MAX_VERTICES;
+			}
+
+			if (event->action == IDC_VERTEX_NEXT)
+				cutVertID += 1;
+			else if (event->action == IDC_VERTEX_PREV)
+				cutVertID -= 1;
+
 			if (cutVertID < -1)
 				cutVertID = -1;
-			if (cutVertID >= maxVF - 1)
-				cutVertID = maxVF - 1;
-			glw->d_vertexIndex = cutVertID;
-			glw->redraw();
+			else if (cutVertID > maxIdx)
+				cutVertID = maxIdx;
 
-			char str[32];
 			sprintf_s (str, sizeof(str), "%d", cutVertID);
 			leVertex->setLabel (str);
-		}
-		break;
 
-		case IDC_INCVERTEX:
-		{
-			int maxVF = ((mxCheckBox *)event->widget)->isChecked() ? MDX_MAX_TRIANGLES : MDX_MAX_VERTICES;
-			int cutVertID = atoi(leVertex->getLabel()) + 1;
-			if (cutVertID >= maxVF -1)
-				cutVertID = maxVF -1;
-			glw->d_vertexIndex = cutVertID;
-			glw->redraw();
-
-			char str[32];
-			sprintf_s (str, sizeof(str), "%d", cutVertID);
-			leVertex->setLabel (str);
-		}
-		break;
-		case IDC_VERT_USEFACE:
-		{
-			if (( (mxCheckBox *)event->widget)->isChecked() )
+			if (isFace)
 				glw->d_vertexUseFace = 1;
 			else
 				glw->d_vertexUseFace = 0;
+
+			glw->d_vertexIndex = cutVertID;
 			glw->redraw();
 		}
 		break;
@@ -1276,6 +1385,16 @@ MDXViewer::redraw ()
 }
 
 
+void
+MDXViewer::setStartPaused()
+{
+	mxEvent event;
+	event.event = mxEvent::Action;
+	event.action = IDC_PAUSE;
+	handleEvent (&event);
+}
+
+
 
 void
 MDXViewer::makeScreenShot (const char *filename)
@@ -1317,6 +1436,55 @@ MDXViewer::makeScreenShot (const char *filename)
 }
 
 
+#if KINGPIN
+void
+MDXViewer::makeUVMapImage(const char *filename)
+{
+	int w = 1024;
+	int h = 1024;
+
+	mxImage *image = new mxImage ();
+	if (image->create (w, h, 24))
+	{
+		byte *data = (byte *) image->data;
+		int i = 0;
+		for (int y = 0; y < h; y++)
+		{
+			for (int x = 0; x < w; x++)
+			{	//fill black
+				data[i++] = (byte)0x00;
+				data[i++] = (byte)0x00;
+				data[i++] = (byte)0x00;
+			}
+		}
+		mdx_model_t*mdl = glw->getModel(0);
+		if (mdl)
+		{
+			int tri, triCnt = mdl->header.numTriangles;
+			for (tri = 0; tri < triCnt; tri++)
+			{
+				// todo mdl->
+				for (int y = 0; y < h; y++)
+				{
+					for (int x = 0; x < w; x++)
+					{	//fill black
+						data[i++] = (byte)0x00;
+						data[i++] = (byte)0x00;
+						data[i++] = (byte)0x00;
+					}
+				}
+			}
+		}
+		
+
+		if (!mxTgaWrite (filename, image))
+			mxMessageBox (this, "Error writing screenshot.", "Kingpin Model Viewer", MX_MB_OK | MX_MB_ERROR);
+
+		delete image;
+	}
+}
+#endif
+
 
 void
 MDXViewer::setRenderMode (int mode)
@@ -1335,22 +1503,23 @@ MDXViewer::setRenderMode (int mode)
 
 
 void
-MDXViewer::centerModel ()
+MDXViewer::centerModel (int frame, int pos2)
 {
 	if (glw->getModel (0))
 	{
-		float minmax[6];
+		float min[3], max[3];
 
-		mdx_getBoundingBox (glw->getModel(0), minmax, 0);
-
-		
-		// center vertically
-		glw->d_transY = (minmax[3] + minmax[2]) / 2;
+		mdx_getBoundingBox (glw->getModel(0), min, max, frame); // todo current frame?
 
 		// adjust distance
-		float dx = minmax[1] - minmax[0];
-		float dy = minmax[3] - minmax[2];
-		float dz = minmax[5] - minmax[4];
+		float dx = max[0] - min[0];
+		float dy = max[1] - min[1];
+		float dz = max[2] - min[2];
+		float xPos = (max[0]/2) + (min[0]/2);
+		float xPos2 = (max[0] + min[0]) / 2;
+		float xPos3 = (max[0] - dx) / 2;
+
+		if (0) 0;
 
 		float d = dx;
 		if (dy > d)
@@ -1359,9 +1528,30 @@ MDXViewer::centerModel ()
 		if (dz > d)
 			d = dz;
 
-		glw->d_transZ = d * 1.2f;
-		glw->d_transX = 0;
+		if (xPos3 > d)
+			d = xPos3;
+		/*if ((max[0]/2) > d)
+			d = (max[0]/2);
+		float minHalve = (float)(abs((long)min[0]) / 2);
+		if (minHalve > d)
+			d = minHalve;*/
+
+		// center on model
+		if (pos2)
+		{
+			glw->d_transX = (max[0] + min[0]) / 2; // dy; //centre on model //grid
+			glw->d_transY = (max[1] + min[1]) / 2; //min[1] + (dy / 2);
+			glw->d_transZ = max[2]; // +(dy / 2); // d * 1.2f; //z-depth
+		}
+		else //centre on grid
+		{
+			glw->d_transX = xPos3; //centre on grid
+			glw->d_transY = (max[1] + min[1]) / 2;
+			glw->d_transZ = d * 1.2f; //z-depth
+		}
 		glw->d_rotX = glw->d_rotY = 0.0f;
+		glw->d_modelOriginX = dx;
+		glw->d_modelOriginZ = dz;
 	}
 }
 
@@ -1379,94 +1569,100 @@ MDXViewer::loadModel (const char *ptr, int pos)
 	if (pos == TEXTURE_MODEL_0)
 	{	
 		initAnimation (model, -1);
-		centerModel ();	
-		if (model->header.numFrames == 1)
-			setPauseMode();
+		centerModel (0, 0);	
+		//if (model->header.numFrames == 1)
+		setPauseMode(model->header.numFrames);
 	}
 
-	setModelInfo(model, pos); //hypov8 print details
 	glw->loadTexture(glw->modelTexNames[pos], pos);
-
+	setModelInfo(); // model, pos); //hypov8 print details
 	glw->redraw ();
 
 	return true;
 }
 
-
+//#define getMin(a, b) ((a<b)? a:b)
+//#define getMax(a, b) ((a>b)? a:b)
 
 void
-MDXViewer::setModelInfo (mdx_model_t *model, int pos)
+MDXViewer::setModelInfo () //mdx_model_t *model, int pos)
 {
 	static char str1[1024];
 	static char str2[1024];
 	static char str3[1024];
 
+	bool found = false;
+	long Skins = 0;
+	long Vertices = 0;
+	long Triangles = 0;
+	long GlCommands = 0;
+	long Frames = 0;
+	float bMin[3] = {9999.9f, 9999.9f};
+	float bMax[3] = {-9999.9f, -9999.9f};
+	mdx_model_t *model;
 
-	if(pos == TEXTURE_MODEL_0) //first model
+	for (int i = 0; i < 6; i++)
 	{
+		model = glw->getModel(i);
 		if (model)
 		{
-			sprintf_s (str1, sizeof(str1),
-				"Skins: %d\n"
-				"Vertices: %d\n"
-				"Triangles: %d\n"
-				"GlCommands: %d\n"
-				"Frames: %d",
-				model->header.numSkins,
-				model->header.numVertices,
-				model->header.numTriangles,
-				model->header.numGlCommands,
-				model->header.numFrames
-				);
-
-				Skins = model->header.numSkins;
-				Vertices = model->header.numVertices;
-				Triangles = model->header.numTriangles;
-				GlCommands = model->header.numGlCommands;
+			found = true;
+			if (i == 0)
+			{
 				Frames = model->header.numFrames;
-
-			sprintf_s (str2, sizeof(str2),
-				"BBox (Frame 0):\n"
-				"min (%5.1f, %5.1f, %5.1f)\n"
-				"max (%5.1f, %5.1f, %5.1f)",
-				model->min[0],model->min[1],model->min[2],
-				model->max[0], model->max[1], model->max[2]);
-
-			sprintf_s(str3, sizeof(str3),
-				"Model: %s", glw->modelFileNames[0]);
-		}
-		else
-		{
-			strcpy_s(str1, sizeof(str1), "No Models.");
-			str2[0] = '\0';
-			str3[0] = '\0';
-		}	
-	}
-	else //rest of models
-	{
-		if (model)
-		{
+			}
 			Skins += model->header.numSkins;
 			Vertices += model->header.numVertices;
 			Triangles += model->header.numTriangles;
 			GlCommands += model->header.numGlCommands;
-			sprintf_s (str1, sizeof(str1),
-				"Skins: %d\n"
-				"Vertices: %d\n"
-				"Triangles: %d\n"
-				"GlCommands: %d\n"
-				"Frames: %d\n",
-				Skins,
-				Vertices,
-				Triangles,
-				GlCommands,
-				Frames
-			);
+
+			bMin[0] = min(model->bBoxMin[0], bMin[0]);
+			bMin[1] = min(model->bBoxMin[1], bMin[1]);
+			bMin[2] = min(model->bBoxMin[2], bMin[2]);
+
+			bMax[0] = max(model->bBoxMax[0], bMax[0]);
+			bMax[1] = max(model->bBoxMax[0], bMax[1]);
+			bMax[2] = max(model->bBoxMax[0], bMax[2]);
 		}
 	}
+
+	if (!found)
+	{
+		strcpy_s(str1, sizeof(str1), "No Models.");
+		str2[0] = '\0';
+		str3[0] = '\0';
+	}
+	else
+	{
+		sprintf_s(str1, sizeof(str1),
+			"Skins: %d\n"
+			"Vertices: %d\n"
+			"Triangles: %d\n"
+			"GlCommands: %d\n"
+			"Frames: %d\n",
+			Skins,
+			Vertices,
+			Triangles,
+			GlCommands,
+			Frames);
+
+		sprintf_s(str2, sizeof(str2),
+			"BBox (Frame 0):\n"
+			"min (%5.1f, %5.1f, %5.1f)\n"
+			"max (%5.1f, %5.1f, %5.1f)",
+			bMin[0], bMin[1], bMin[2],
+			bMax[0], bMax[1], bMax[2]);
+
+		sprintf_s(str3, sizeof(str3),
+			"Model: %s\n"
+			"Skin0: %s", 
+			glw->modelFileNames[0], 
+			glw->modelTexNames[0]);
+	}
+
 	lModelInfo1->setLabel(str1); //model stats
 	lModelInfo2->setLabel(str2); //bbox
-	lModelInfo3->setLabel(str3); //model path
+	lModelInfo3->setLabel(str3); //model path/texture
 }
 
 
@@ -1758,16 +1954,23 @@ void ProcessArgs(int argc, char *argv[])
 {
 	int aIdx = 1;
 	int fIdx = 0;
-
+	d_startPaused = 0;
 	d_startMode = 0;
 	while (aIdx < argc)
 	{
 		if (argv[aIdx][0] == '-')
 		{
 			byte a = (byte)argv[aIdx][1] - 48;
-			if (a < 0)	a = 0;
-			if (a>3)	a = 3;
-			d_startMode = (int)a;
+			if (a == 64) //-p
+				d_startPaused = 1;
+			else
+			{	//-0, -1, -2, -3 (render mode)
+				if (a < 0)
+					a = 0;
+				if (a > 3)
+					a = 3;
+				d_startMode = (int)a;
+			}
 		}
 		else if (fIdx < 6)
 		{	

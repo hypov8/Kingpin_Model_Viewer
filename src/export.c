@@ -179,16 +179,16 @@ float avertexnormals[NUMVERTEXNORMALS][3] = {
 
 
 //glcmds related
-int	commands[65536];
-int numcommands, numglverts;
-int	used[MAX_TRIANGLES];
-int	strip_xyz[128];
-int	strip_st[128];
-int	strip_tris[128];
-int	stripcount;
-int FanLength(int starttri, int startv, md2_model_t *md2);
-int StripLength(int starttri, int startv, md2_model_t *md2);
-void BuildGlCmds(md2_model_t *md2);
+//int	commands[65536];
+//int numcommands, numglverts;
+//int	used[MDL_MAX_TRIANGLES];
+//int	strip_xyz[128];
+//int	strip_st[128];
+//int	strip_tris[128];
+//int	stripcount;
+//int FanLength(int starttri, int startv, md2_model_t *md2);
+//int StripLength(int starttri, int startv, md2_model_t *md2);
+//void BuildGlCmds(md2_model_t *md2);
 
 //
 
@@ -536,7 +536,10 @@ int SaveAsMDX(const char *filename, mdx_model_t *active_model)
 	
 	bboxFrames = (float*)malloc(sizeof(float)*active_model->header.numFrames * 6);
 	vertInfo = (int*)malloc(sizeof(int)*active_model->header.numVertices);
-	mdx_export->glCommandBuffer = (int *)malloc(sizeof(int) * active_model->header.numTriangles * 5 + active_model->header.numTriangles * 2);//Allocate memory for GLCommands
+	//
+	//Allocate memory for GLCommands						tri * 3(vert) * 5(UV[0]+UV[1]+vIdx+len+obID)
+	mdx_export->glCommandBuffer = (int *)malloc(sizeof(int) * active_model->header.numTriangles * 3 * 5);
+
 	if (!mdx_export || !bboxFrames || !mdx_export->glCommandBuffer)
 	{
 		_close(handle);
@@ -565,6 +568,8 @@ int SaveAsMDX(const char *filename, mdx_model_t *active_model)
 	//rebuild GLCommands and create software skin UV cords..
 	while (!isFinished)
 	{
+		//todo: write memoryblocks instead. mdx conversion just need object id added
+
 		//read/write tris type (fan/strip)
 		first = mdx_export->glCommandBuffer[k++] = active_model->glCommandBuffer[i++];
 
@@ -714,6 +719,7 @@ int SaveAsMD_(const char *filename, mdx_model_t *model)
 		return SaveAsMD2(filename, model);
 }
 
+#if 0
 // from models.c in the Quake 2 source.
 void BuildGlCmds(md2_model_t *md2)
 {
@@ -799,10 +805,12 @@ void BuildGlCmds(md2_model_t *md2)
 
 	commands[numcommands++] = 0;		// end of list marker
 }
+#endif
 
 //===========
 //StripLength
 //===========
+#if 0
 int StripLength(int starttri, int startv, md2_model_t *md2)
 {
 	int				m1, m2;
@@ -884,11 +892,12 @@ done:
 
 	return stripcount;
 }
-
+#endif // 0
 
 //===========
 //FanLength
 //===========
+#if 0
 int FanLength(int starttri, int startv, md2_model_t *md2)
 {
 	int		m1, m2;
@@ -962,7 +971,6 @@ done:
 
 	return stripcount;
 }
-
-
+#endif
 
 

@@ -1,12 +1,6 @@
+
 #ifndef INCLUDED_MD2
 #define INCLUDED_MD2
-
-#define MD2_MAX_TRIANGLES		4096
-#define MD2_MAX_VERTICES		2048
-#define MD2_MAX_TEXCOORDS		2048
-#define MD2_MAX_FRAMES			1024
-#define MD2_MAX_SKINS			32
-#define MD2_MAX_FRAMESIZE		(MD2_MAX_VERTICES * 4 + 128)
 
 typedef struct 
 { 
@@ -48,8 +42,8 @@ typedef struct
 	byte					*framesBuffer;
 	int						*glCommandBuffer;
 	int						isMD2;
-	float					min[3];
-	float					max[3];
+	float					bBoxMin[3];
+	float					bBoxMax[3];
 } md2_model_t;
 
 

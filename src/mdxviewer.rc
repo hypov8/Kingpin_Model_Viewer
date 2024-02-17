@@ -87,12 +87,12 @@ BEGIN
         BEGIN
             VALUE "Comments", "Kingpin Model Viewer by Hypov8"
             VALUE "CompanyName", "Kingpin.info"
-            VALUE "FileDescription", "Kingpin Model Viewer 1.1.6" //hypov8 version
-            VALUE "FileVersion", "1, 1, 6, 0" //hypov8 version
+            VALUE "FileDescription", "Kingpin Model Viewer 1.1.6.11" //hypov8 version KP_BUILD_VERSION
+            VALUE "FileVersion", "1, 1, 6, 11" //hypov8 version KP_BUILD_VERSION
             VALUE "InternalName", "KP_Viewer.exe"
             VALUE "OriginalFilename", "KP_Viewer.exe"
             VALUE "ProductName", "Kingpin Model Viewer"
-            VALUE "ProductVersion", "1, 1, 6, 0" //hypov8 version
+            VALUE "ProductVersion", "1, 1, 6, 11" //hypov8 version KP_BUILD_VERSION
         END
     END
     BLOCK "VarFileInfo"
