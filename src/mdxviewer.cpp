@@ -1621,8 +1621,8 @@ MDXViewer::setModelInfo () //mdx_model_t *model, int pos)
 			bMin[2] = min(model->bBoxMin[2], bMin[2]);
 
 			bMax[0] = max(model->bBoxMax[0], bMax[0]);
-			bMax[1] = max(model->bBoxMax[0], bMax[1]);
-			bMax[2] = max(model->bBoxMax[0], bMax[2]);
+			bMax[1] = max(model->bBoxMax[1], bMax[1]);
+			bMax[2] = max(model->bBoxMax[2], bMax[2]);
 		}
 	}
 

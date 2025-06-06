@@ -12,15 +12,17 @@ static int g_interp = 1; /* interpolate frames */
 
 
 //md2 compat
-int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, int numFrames, int numVertices, int frameSize, float*min, float*max,
+int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, 
+	int numFrames, int numVertices, int frameSize, float*bboxMin, float*bboxMax,
 	int offsetFrames, byte **framesBuffer,
-	 boolean isModel_HD) //HD
+	boolean isModel_HD) //HD
 {
-	int i;
+	int i, j, nIdx;
 	mdx_frame_t *frames;
-	char *v1, *v2;
+	char *v1, *v2, *fName;
 	byte *v16;
-
+	float fScale[3];
+	mdx_alias_frame_t *frame;
 
 	*pFrames = (mdx_frame_t *)calloc(numFrames, sizeof(mdx_frame_t));
 	if (!pFrames)
@@ -32,15 +34,13 @@ int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, int numFr
 
 	
 	//hypov8 get bbox
-	min[0] = min[1] = min[2] = 999999.0f;
-	max[0] = max[1] = max[2] = -999999.0f;
+	bboxMin[0] = bboxMin[1] = bboxMin[2] = 999999.0f;
+	bboxMax[0] = bboxMax[1] = bboxMax[2] = -999999.0f;
 
 	for (i = 0; i < numFrames; i++)
 	{
-		mdx_alias_frame_t *frame = (mdx_alias_frame_t *)buffer;
-		int j, nIdx;
-		char *fName = frames[i].name;
-		float fScale[3];
+		frame = (mdx_alias_frame_t *)buffer;
+		fName = frames[i].name;
 
 		fread(frame, 1, frameSize, file);
 		memcpy(fName, frame->name, sizeof(frame->name)); //todo: null terminated?
@@ -85,17 +85,15 @@ int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer, int numFr
 			frames[i].vertices[j].normal[0] = avertexnormals[nIdx][1];
 			frames[i].vertices[j].normal[1] = avertexnormals[nIdx][2];
 
-			//get model bbox min/max
+			//get model bbox min/max (frame0)
 			if (i == 0)
 			{
-				int bbox;
-				for (bbox = 0; bbox < 3; bbox++)
-				{
-					if (frames[i].vertices[j].vertex[bbox] < min[bbox])
-						min[bbox] = frames[i].vertices[j].vertex[bbox];
-					if (frames[i].vertices[j].vertex[bbox] > max[bbox])
-						max[bbox] = frames[i].vertices[j].vertex[bbox];
-				}
+				bboxMin[0] = min(bboxMin[0], frames[0].vertices[j].vertex[2]);
+				bboxMax[0] = max(bboxMax[0], frames[0].vertices[j].vertex[2]);
+				bboxMin[1] = min(bboxMin[1], frames[0].vertices[j].vertex[0]); //z-far
+				bboxMax[1] = max(bboxMax[1], frames[0].vertices[j].vertex[0]); //z-far
+				bboxMin[2] = min(bboxMin[2], frames[0].vertices[j].vertex[1]);
+				bboxMax[2] = max(bboxMax[2], frames[0].vertices[j].vertex[1]);
 			}
 		}
 	}
