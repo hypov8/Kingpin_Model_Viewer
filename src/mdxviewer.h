@@ -12,7 +12,7 @@
 //#include "common.h"
 //#endif
 
-#define KP_BUILD_VERSION "1.1.6.11"
+#define KP_BUILD_VERSION "1.1.6.12"
 
 
 #define IDC_MODEL_LOADMODEL			1001

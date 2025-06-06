@@ -54,6 +54,9 @@
 // - Updated HD model support
 // - Fixed crash for large models. Added dynamic memory for frame buffer
 
+//version 1.1.6.12
+// - fix bbox display size
+
 //todo 
 //framerate limit (currently set to 60)
 //stop building models every frame (use buffer)
