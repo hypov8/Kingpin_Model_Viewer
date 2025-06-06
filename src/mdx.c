@@ -740,9 +740,9 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 		};
 
 		glColor4f(rgb[0], rgb[1], rgb[2], 0.3f); //set red
-		glEnable(GL_BLEND); //Enable blending.
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glBegin(GL_QUADS);
+		//glEnable(GL_BLEND); //Enable blending.
+		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		//glBegin(GL_QUADS);
 		for (i = 0; i < iObj; i++)
 		{
 			bbox = &model->hitBox[fSize * i + fOfs1];
@@ -767,14 +767,16 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 
 			for (j = 0; j < 6; j++)
 			{
+				glBegin(GL_LINE_LOOP);
 				glVertex3f(minMax[cube[j][0]], minMax[cube[j][1]], minMax[cube[j][2]]);
 				glVertex3f(minMax[cube[j][3]], minMax[cube[j][4]], minMax[cube[j][5]]);
 				glVertex3f(minMax[cube[j][6]], minMax[cube[j][7]], minMax[cube[j][8]]);
 				glVertex3f(minMax[cube[j][9]], minMax[cube[j][10]], minMax[cube[j][11]]);
+				glEnd();
 			}
 		}
-		glEnd();
-		glDisable(GL_BLEND);
+		//glEnd();
+		//glDisable(GL_BLEND);
 	} //end hitbox
 
 
