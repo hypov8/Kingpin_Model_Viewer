@@ -11,7 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\anorms.h" />
+    <ClInclude Include="..\src\anorms.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="..\src\common.h" />
     <ClInclude Include="..\src\GlWindow.h" />
     <ClInclude Include="..\src\md2.h" />
@@ -143,12 +146,13 @@
       <ObjectFileName>.\Debug\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <AdditionalIncludeDirectories>..\mxtk\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnablePREfast>false</EnablePREfast>
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <PreprocessKeepComments>true</PreprocessKeepComments>
+      <PreprocessKeepComments>false</PreprocessKeepComments>
       <SmallerTypeCheck>true</SmallerTypeCheck>
+      <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>

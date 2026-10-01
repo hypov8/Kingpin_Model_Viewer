@@ -2,8 +2,10 @@
 #define INCLUDED_COMMON
 
 
-#include "mdx.h"
-#include "md2.h"
+//#include "mdx.h"
+//#include "md2.h"
+
+#define MAX_PATH_LEN 256
 
 
 #if 1 //def KINGPIN_MDX_V5
@@ -26,12 +28,13 @@
 typedef unsigned char byte;
 #endif /* byte */
 
+extern const float avertexnormals[NUMVERTEXNORMALS][3];
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-float avertexnormals[NUMVERTEXNORMALS][3];
+
 
 #ifdef __cplusplus
 }

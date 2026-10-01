@@ -5,3 +5,5 @@ msvc/
 *.filters
 *.opendb
 *.db
+*.
+*/.*

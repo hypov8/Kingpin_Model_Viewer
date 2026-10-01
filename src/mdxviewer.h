@@ -6,91 +6,152 @@
 #include <mx/mxWindow.h>
 #endif
 
-//#ifndef INCLUDED_MDX
-#include "mdx.h"
-
-//#include "common.h"
-//#endif
-
-#define KP_BUILD_VERSION "1.1.6.12"
-
-
-#define IDC_MODEL_LOADMODEL			1001
-#define IDC_MODEL_MERGEMODEL		1002
-#define IDC_MODEL_UNLOADMODEL		1003
-#define IDC_MODEL_UNLOADWEAPON		1004
-#define IDC_MODEL_OPENPAKFILE		1005
-#define IDC_MODEL_OPENPAKFILE2		1006
-#define IDC_MODEL_CLOSEPAKFILE		1007
-#define IDC_MODEL_RECENTMODELS1		1008
-#define IDC_MODEL_RECENTMODELS2		1009
-#define IDC_MODEL_RECENTMODELS3		1010
-#define IDC_MODEL_RECENTMODELS4		1011
-#define IDC_MODEL_RECENTPAKFILES1	1012
-#define IDC_MODEL_RECENTPAKFILES2	1013
-#define IDC_MODEL_RECENTPAKFILES3	1014
-#define IDC_MODEL_RECENTPAKFILES4	1015
-#define IDC_MODEL_EXIT				1016
-#define IDC_MODEL_MD2				1017
-#define IDC_MODEL_SAVE				1018
-#define IDC_MODEL_LOAD_PMODEL		1019 //HYPOV8 OPEN MODEL FOLDER
-
-#define IDC_SKIN_MODELSKIN1			1021
-#define IDC_SKIN_MODELSKIN2			1022
-#define IDC_SKIN_MODELSKIN3			1023
-#define IDC_SKIN_MODELSKIN4			1024
-#define IDC_SKIN_MODELSKIN5			1025
-#define IDC_SKIN_MODELSKIN6			1026
-#define IDC_SKIN_BACKGROUND			1027
-#define IDC_SKIN_WATER				1028
-#define IDC_SKIN_SCREENSHOT			1029
-
-#define IDC_SKIN_RELOAD				1030 //HYPOV8
-#define IDC_SKIN_AVI				1031
-#define IDC_SKIN_UV					1032
+#ifndef INCLUDED_COMMON
+	#include "common.h"
+#endif
+#ifndef INCLUDED_MDX
+	#include "mdx.h"
+#endif
+#ifndef INCLUDED_MD2
+	#include "md2.h"
+#endif
 
 
-#define IDC_OPTIONS_BGCOLOR			1033
-#define IDC_OPTIONS_WFCOLOR			1034
-#define IDC_OPTIONS_FGCOLOR			1035
-#define IDC_OPTIONS_LIGHTCOLOR		1036
-#define IDC_OPTIONS_GRIDCOLOR		1037 //grid color
-#define IDC_OPTIONS_DEBUGCOLOR		1038 //vertex norms, hitbox
-#define IDC_OPTIONS_CENTERMODEL1	1039
-#define IDC_OPTIONS_CENTERMODEL2	1040
-#define IDC_OPTIONS_GEN_NORMALS		1041
-#define  IDC_OPTIONS_LOADINVALID	1042 //ignore header size
+#define KP_BUILD_VERSION "1.1.6.14"
+//#define MAX_PATH_LEN 256
 
-#define IDC_HELP_GOTOHOMEPAGE		1051
-#define IDC_HELP_ABOUT				1052
+enum idControlEvents1
+{
+	IDC_MODEL_LOADMODEL = 1001,
+	IDC_MODEL_MERGEMODEL,
+	IDC_MODEL_UNLOADMODEL,
+	IDC_MODEL_UNLOADWEAPON,
+	IDC_MODEL_OPENPAKFILE,
+	//IDC_MODEL_OPENPAKFILE2,
+	IDC_MODEL_CLOSEPAKFILE,
+	IDC_MODEL_EXIT,
+	IDC_MODEL_MD2,
+	IDC_MODEL_SAVE,
+	IDC_MODEL_LOAD_PMODEL, //HYPOV8 OPEN MODEL FOLDER
 
-#define IDC_RENDERMODE				2001
-#define IDC_WATER					2002
-#define IDC_LIGHT					2003
-#define IDC_BRIGHTNESS				2004
-#define IDC_SHININESS				2005
-#define IDC_BACKGROUND				2006
-#define IDC_TEXTURELIMIT			2007
-#define IDC_VERTNORMS				2008
-#define IDC_GRID					2009
-#define IDC_HITBOX					2010
+	IDC_SKIN_MODELSKIN1,
+	IDC_SKIN_MODELSKIN2,
+	IDC_SKIN_MODELSKIN3,
+	IDC_SKIN_MODELSKIN4,
+	IDC_SKIN_MODELSKIN5,
+	IDC_SKIN_MODELSKIN6,
+	IDC_SKIN_BACKGROUND,
+	IDC_SKIN_WATER,
 
-#define IDC_ANIMATION_SETS			3001
-#define IDC_INTERPOLATE				3002
-#define IDC_GLCOMMANDS				3003
-#define IDC_PITCH					3004
-#define IDC_PAUSE					3005
-#define IDC_BTN_SET_FRAME			3006
-#define IDC_INCFRAME				3007
-#define IDC_DECFRAME				3008
-#define IDC_1ST_PERSON				3009 //hypov8
-#define IDC_VERTEX_SET				3010 //HYPOVERTEX vertex number input
-#define IDC_VERTEX_NEXT				3011 //HYPOVERTEX increase FRAME
-#define IDC_VERTEX_PREV				3012 //HYPOVERTEX decrease FRAME
-#define IDC_VERT_USEFACE			3013 //HYPOVERTEX switch modes
+	IDC_SKIN_RELOAD, //HYPOV8
+
+	//file output
+	IDC_MAKE_SCREENSHOT,
+	IDC_MAKE_AVI,
+	IDC_MAKE_UV_RES,
+	IDC_MAKE_UV_1K,
+	IDC_MAKE_UV_2K,
+
+	//options
+	IDC_OPTIONS_BGCOLOR,
+	IDC_OPTIONS_WFCOLOR,
+	IDC_OPTIONS_FACECOLOR,
+	IDC_OPTIONS_LIGHTCOLOR,
+	IDC_OPTIONS_GRIDCOLOR, //grid color
+	IDC_OPTIONS_DEBUGCOLOR1, //vertex norms, hitbox, wireframe, glCommands
+	IDC_OPTIONS_DEBUGCOLOR2,
+	IDC_OPTIONS_CENTERMODEL1,
+	IDC_OPTIONS_CENTERMODEL2,
+	IDC_OPTIONS_GEN_NORMALS,
+	IDC_OPTIONS_LOADINVALID, //ignore header size
+	IDC_OPTIONS_LOAD_PAUSED, //ini option
+
+	IDC_HELP_GOTOHOMEPAGE,
+	IDC_HELP_ABOUT,
+
+	IDC_MODEL_RECENTMODELS_FIRST,
+	IDC_MODEL_RECENTMODELS1 = IDC_MODEL_RECENTMODELS_FIRST,
+	IDC_MODEL_RECENTMODELS2,
+	IDC_MODEL_RECENTMODELS3,
+	IDC_MODEL_RECENTMODELS4,
+	IDC_MODEL_RECENTMODELS5,
+	IDC_MODEL_RECENTMODELS6,
+	IDC_MODEL_RECENTMODELS7,
+	IDC_MODEL_RECENTMODELS8,
+	IDC_MODEL_RECENTMODELS_LAST = IDC_MODEL_RECENTMODELS8,
+
+	IDC_MODEL_RECENTPAKFILES1,
+	IDC_MODEL_RECENTPAKFILES2,
+	IDC_MODEL_RECENTPAKFILES3,
+	IDC_MODEL_RECENTPAKFILES4,
+	IDC_MODEL_RECENTPAKFILES5,
+	IDC_MODEL_RECENTPAKFILES6,
+	IDC_MODEL_RECENTPAKFILES7,
+	IDC_MODEL_RECENTPAKFILES8,
+
+	IDC_KEYS_F5,
+	IDC_KEYS_PAUSE,
+	IDC_KEYS_MODE1,
+	IDC_KEYS_MODE2,
+	IDC_KEYS_MODE3,
+	IDC_KEYS_MODE4,
+};
+
+enum idControlEvents2
+{
+	IDC_RENDERMODE=2001,
+	IDC_WATER,
+	IDC_LIGHT,
+	IDC_BRIGHTNESS,
+	IDC_SHININESS,
+	IDC_BACKGROUND,
+	IDC_VERTNORMS,
+	IDC_GRID,
+	IDC_HITBOX,
+	IDC_WIREFRAME,
+};
+
+
+enum idControlEvents3
+{
+	IDC_ANIMATION_SETS = 3001, //animation dropdown event
+	IDC_INTERPOLATE,
+	IDC_GLCOMMANDS,
+	IDC_PITCH,
+	IDC_PAUSE,
+	IDC_BTN_SET_FRAME,
+	IDC_INCFRAME,
+	IDC_DECFRAME,
+	IDC_1ST_PERSON,   //hypov8
+	IDC_VERTEX_SET,   //HYPOVERTEX vertex number input
+	IDC_VERTEX_NEXT,  //HYPOVERTEX increase FRAME
+	IDC_VERTEX_PREV,  //HYPOVERTEX decrease FRAME
+	IDC_VERT_USEFACE, //HYPOVERTEX switch modes
+};
+
+
 
 #define MAX_MODELS 6 //HYPOV8
-#define MAX_TEXTURES 6+2 //1->6 = model, 7 = background, 8 = water 
+#define MAX_TEXTURES MAX_MODELS+2 //1-6=model, 7=background, 8=water 
+
+#define vec4Set(out, in1, in2, in3, in4)   (out[0]=(in1),out[1]=(in2),out[2]=(in3),out[3]=(in4))
+#define BRIGHTNESS_LEVELS_MAX 9
+#define BRIGHTNESS_LEVELS_STD 1
+#define SET_BIT(x) (1<<(x))
+
+#define RGB_COLOR_WHITE      1.0f, 1.0f, 1.0f
+#define RGB_COLOR_GREY       0.45f, 0.45f, 0.45f //slight darker. helps with light and paint tools.
+#define RGB_COLOR_GREY_DARK  0.35f, 0.35f, 0.35f
+#define RGB_COLOR_GREY_LIGHT 0.85f, 0.85f, 0.85f
+#define RGB_COLOR_GREY_BLUE  0.35f, 0.45f, 0.55f
+
+#define RGB_COLOR_RED        1.0f, 0.0f, 0.0f
+#define RGB_COLOR_GREEN      0.0f, 1.0f, 0.0f
+#define RGB_COLOR_BLUE       0.0f, 0.0f, 1.0f
+
+
+#define NUM_RECENT_FILES (IDC_MODEL_RECENTMODELS_LAST - IDC_MODEL_RECENTMODELS_FIRST +1)
+
 
 class mxProgressBar;
 class mxTab;
@@ -111,7 +172,7 @@ class MDXViewer : public mxWindow
 	mxProgressBar *UI_bar;
 
 	mxChoice *cRenderMode;
-	mxCheckBox *cbWater, *cbLight, *cbBackground, *cbInterp;
+	mxCheckBox *cbWireFrame, *cbWater, *cbLight, *cbBackground, *cbInterp, *cbGrid;
 
 	mxChoice *cAnim; //dropdown animation sets
 	mxButton *bPause; //button pause
@@ -142,15 +203,27 @@ class MDXViewer : public mxWindow
 	mdx_model_t *mdxModel;
 	mdx_model_t *mdxWeapon;
 
-	void loadRecentFiles ();
-	void saveRecentFiles ();
+	int  d_startMode;
+	bool d_startPaused;
+
+	char d_recentModelFiles[NUM_RECENT_FILES][MAX_PATH_LEN];
+	char d_recentPakFiles[NUM_RECENT_FILES][MAX_PATH_LEN];
+
+	void loadConfigFile ();
+	void saveConfigFile ();
 	void initRecentFiles ();
 
-	bool loadModel (const char *ptr, int pos);
-	void setModelInfo(); // mdx_model_t *model, int pos);
+	void updateRecentPaths (int eventID, char *str2);
+	void updateRecentPaths_(char paths[NUM_RECENT_FILES][MAX_PATH_LEN], char *newPath);
+
+	void updateRecentMenu (int eventID);
+	void updateRecentMenu_(char paths[NUM_RECENT_FILES][MAX_PATH_LEN], int eventID);
+
+	bool loadModel_ (const char *ptr, int pos, bool getSkin);
+	void setDisplayModelInfo(); // mdx_model_t *model, int pos);
 	void initAnimation (mdx_model_t *model, int animation);
 	void initAVIAnimation (mdx_model_t *model, int animation, int *start, int *end);
-	int MakeAVI(int start, int end);
+	int  MakeAVI(int start, int end);
 
 	//void ProcessArgs(int argc, char *argv[]);
 	
@@ -165,15 +238,18 @@ public:
 	virtual int handleEvent (mxEvent *event);
 	void redraw ();
 	void makeScreenShot (const char *filename);
-	void makeUVMapImage(const char *filename);
+	void makeUVMapImage(const char *filename, int skinSize);
 	void setRenderMode (int index);
 	void centerModel (int frame, int pos2);
 
-	void setStartPaused(); //hypov8
+	void setStatePaused(); //hypov8
 
 	void reset_modelData(); //hypov8
+	void reset_viewData(); //hypov8
 	void setPauseMode(int frames); //hypov8
-	int importPlayerModelFolder(const char *ptr, int mode, int mIndex);
+	void setFrameDisplay(int frame); //hypov8
+	int importPlayerModelFolder(const char *ptr, int mode, int mIndex, bool getSkin);
+
 	// ACCESSORS
 	mxMenuBar *getMenuBar () const { return UI_mb; }
 

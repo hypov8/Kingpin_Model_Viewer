@@ -9,7 +9,7 @@
 
 
 int
-pak_ExtractFile (const char *pakFile, const char *lumpName, char *outFile)
+PAKViewer::pak_ExtractFile (const char *pakFile, const char *lumpName, char *outFile)
 {
 	FILE *file =NULL;
 	if (fopen_s(&file, pakFile, "rb"))
@@ -102,13 +102,13 @@ PAKViewer::~PAKViewer ()
 void
 _makeTempFileName (char *str, const char *prefix)
 {
-	char path2[256];
+	char path2[MAX_PATH_LEN];
 
-	GetTempPath (256, path2);
+	GetTempPath (MAX_PATH_LEN, path2);
 
-	strcpy_s (str, 256, path2);
-	strcat_s (str, 256, "mdxtemp"); //hypov8 removed fdSlash
-	strcat_s (str, 256, prefix);
+	strcpy_s (str, MAX_PATH_LEN, path2);
+	strcat_s (str, MAX_PATH_LEN, "mdxtemp"); //hypov8 removed fdSlash
+	strcat_s (str, MAX_PATH_LEN, prefix);
 }
 
 
@@ -139,28 +139,32 @@ PAKViewer::handleEvent (mxEvent *event)
 				pmMenu->setEnabled (4, isPcx || isTga);
 
 				int ret = pmMenu->popup (UI_tvPAK, event->x, event->y);
-				int tess = g_mdxViewer->glw->getModelIndex();
+
 				switch (ret)
 				{
 				case 1: // load model
 					if (isMdx|| isMd2)
 						OnLoadModel (0);
-					else if (isTga|| isPcx)
+					else if (isTga || isPcx)
 						OnLoadTexture (TEXTURE_MODEL_0, isTga? true: false);
 					break;
 
 				case 2: // merge model
+				{
+					int tess = g_mdxViewer->glw->getFreeModelIndex();
 					if (isMdx || isMd2)
 					{
+						
 						HWND hwID = (HWND)g_mdxViewer->getHandle();
-						if (tess >= 6)//max models		
+						if (tess >= MAX_MODELS)//max models		
 							MessageBox(hwID, "Limit of 6 models reached.\nUse \"Load Model\" instead ", "Note", MB_OK);
 						else
 							OnLoadModel(tess);
 					}
 					else if (tess > 0 && (isTga || isPcx))//allow setting model 0 skins
 						OnLoadTexture(tess - 1, isTga ? true : false);
-					break;
+				}
+				break;
 
 				case 3: //load bg
 				case 4: //load water
@@ -271,10 +275,13 @@ PAKViewer::OnLoadModel (int pos)
 	}
 
 	if (pos == TEXTURE_MODEL_0)
+	{
 		g_mdxViewer->reset_modelData();
+		g_mdxViewer->reset_viewData();
+	}
 
 	// now load the things
-	mdx_model_t *model = g_mdxViewer->glw->loadModel (str2, pos);
+	mdx_model_t *model = g_mdxViewer->glw->loadModel (str2, pos, true);
 	if (model)
 	{
 		if (pos == TEXTURE_MODEL_0)
@@ -284,7 +291,7 @@ PAKViewer::OnLoadModel (int pos)
 			//if (model->header.numFrames == 1)
 			g_mdxViewer->setPauseMode(model->header.numFrames);
 		}
-		//g_mdxViewer->setModelInfo (model, pos);
+		//g_mdxViewer->setDisplayModelInfo (model, pos);
 
 		// try to load skin
 		if (model->header.numSkins > 0)
@@ -315,7 +322,7 @@ PAKViewer::OnLoadModel (int pos)
 		if (pos == 0)
 			g_mdxViewer->centerModel (0, 0);
 
-		g_mdxViewer->setModelInfo();//moved down
+		g_mdxViewer->setDisplayModelInfo();//moved down
 
 		g_mdxViewer->glw->redraw ();
 	}
@@ -357,7 +364,7 @@ PAKViewer::OnLoadTexture (int pos, bool isTarga)
 			g_mdxViewer->cbWater->setChecked (true);
 			g_mdxViewer->glw->setFlag (F_WATER, true);
 		}
-		g_mdxViewer->setModelInfo();
+		g_mdxViewer->setDisplayModelInfo();
 		g_mdxViewer->glw->redraw ();
 	}
 	else

@@ -8,20 +8,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
-
-#include "GlWindow.h"
-//#include "common.h"
-//#include "mdx.h"
-//#include "md2.h"
-
 #include <math.h> //sin/cos
 
+#include "GlWindow.h"
 
-//char modelFileNames[MAX_MODELS][256]; //hypov8 models
-//char modelTexNames[MAX_TEXTURES][256]; //hypov8 textures
-
-
-float fps; //todo. limit framerate
 
 
 GlWindow::GlWindow (mxWindow *parent, int x, int y, int w, int h, const char *label, int style)
@@ -30,56 +20,37 @@ GlWindow::GlWindow (mxWindow *parent, int x, int y, int w, int h, const char *la
 	d_rotX = d_rotY = 0;
 	d_transX = d_transY = 0;
 	d_transZ = 50;
-	d_models[0] = 0;
-	d_models[1] = 0;
-	d_models[2] = 0;
-	d_models[3] = 0;
-	d_models[4] = 0;
-	d_models[5] = 0;
-	d_textureNames[0] = 0;
-	d_textureNames[1] = 0;
-	d_textureNames[2] = 0;
-	d_textureNames[3] = 0;
-	d_textureNames[4] = 0;
-	d_textureNames[5] = 0;
-	d_textureNames[6] = 0;
-	d_textureNames[7] = 0;
 
-
-	
+	glGenTextures(MAX_TEXTURES, d_textureGLID);
+	for (int i = 0; i < MAX_TEXTURES; i++)
+	{
+		d_textureValid[i] = false;
+		d_textureRez[i][0] = 0;
+		d_textureRez[i][1] = 0;
+		d_modelTexNames[i][0] = '\0';
+	}
+	for (int i = 0; i < MAX_MODELS; i++)
+	{
+		d_models[i] = 0;
+		d_modelFileNames[i][0] = '\0';
+	}
 	setFrameInfo (0, 0);
 	setRenderMode (0); //reset view to wireframe
-	setFlag (F_WATER, false);
-	setFlag (F_LIGHT, false);
-	setFlag (F_SHININESS, false);
-	setFlag (F_INTERPOLATE, true);
-	setFlag (F_GLCOMMANDS, true);
-	setFlag (F_PAUSE, false); //hypov8
-	setFlag (F_BACKGROUND, false);
-	setFlag (F_VNORMS, false); //hypov8
-	setFlag (F_GRID, true); //hypov8
-	setFlag (F_HITBOX, false); //hypov8
+	setPitch (10.0f); //10fps
+	setBGColor (RGB_COLOR_GREY_BLUE); //hypov8 background. was black
+	setFaceColor(RGB_COLOR_WHITE);
+	setWFColor (RGB_COLOR_WHITE);
+	setLightColor (RGB_COLOR_GREY_LIGHT); //slight grey, so wireframe stands out and shine works
+	setDebugColor1 (RGB_COLOR_RED);       //hypov8 red
+	setDebugColor2 (RGB_COLOR_GREEN);     //hypov8 green
+	setGridColor (RGB_COLOR_GREY_DARK);   //hypov8 dark grey
 
-	setPitch (125.0f);
-	setBGColor (0.5f, 0.5f, 0.5f); //hypov8 background. was black
-	setFGColor (1.0f, 1.0f, 1.0f);
-	setWFColor (1.0f, 1.0f, 1.0f);
-	setLightColor (1.0f, 1.0f, 1.0f);
-	setDebugColor (1.0f, 0.0f, 0.0f); //hypov8 red
-	setGridColor (0.35f, 0.35f, 0.35f); //hypov8 dark grey
-	setBrightness (5);
-	setTextureLimit (512);
+	setBrightness (BRIGHTNESS_LEVELS_STD);
 
-	//setModelIndex(); //hypov8
 	d_modelIndex = 0; //hypov8
 	d_debugLoad = 0; //hypov8 debug model loading
-	memset(modelFileNames, 0, sizeof(modelFileNames)); //hypov8
-	memset(modelTexNames, 0, sizeof(modelTexNames)); //hypov8
-
 	d_vertexIndex = -1; //HYPOVERTEX
 	d_vertexUseFace = 0; //HYPOVERTEX
-
-//	loadTexture ("water.tga", TEXTURE_WATER);
 
 	glCullFace (GL_FRONT);
 
@@ -91,23 +62,33 @@ GlWindow::GlWindow (mxWindow *parent, int x, int y, int w, int h, const char *la
 GlWindow::~GlWindow ()
 {
 	mx::setIdleWindow (0);
-	loadModel (0, TEXTURE_MODEL_0);
-	loadModel(0, TEXTURE_MODEL_1);
-	loadModel(0, TEXTURE_MODEL_2);
-	loadModel(0, TEXTURE_MODEL_3);
-	loadModel(0, TEXTURE_MODEL_4);
-	loadModel(0, TEXTURE_MODEL_5);
+	for (int i = 0; i < MAX_MODELS ; i++) //TEXTURE_MODEL_5
+	{
+		mdx_freeModel(d_models[i]);
+	}
+	
+	/*loadModel(0, TEXTURE_MODEL_0, false);
+	loadModel(0, TEXTURE_MODEL_1, false);
+	loadModel(0, TEXTURE_MODEL_2, false);
+	loadModel(0, TEXTURE_MODEL_3, false);
+	loadModel(0, TEXTURE_MODEL_4, false);
+	loadModel(0, TEXTURE_MODEL_5, false);*/
 
-	loadTexture (0, TEXTURE_MODEL_0); 
-	loadTexture (0, TEXTURE_MODEL_1);
+	/*loadTexture(0, TEXTURE_MODEL_0); 
+	loadTexture(0, TEXTURE_MODEL_1);
 	loadTexture(0, TEXTURE_MODEL_2);
 	loadTexture(0, TEXTURE_MODEL_3);
 	loadTexture(0, TEXTURE_MODEL_4);
 	loadTexture(0, TEXTURE_MODEL_5);
 
-	loadTexture (0, TEXTURE_BACKGROUND);
-	loadTexture (0, TEXTURE_WATER);
+	loadTexture(0, TEXTURE_BACKGROUND);
+	loadTexture(0, TEXTURE_WATER);*/
 
+	glDeleteTextures(MAX_TEXTURES, d_textureGLID);
+	for (int i = 0; i < MAX_TEXTURES; i++)
+	{
+		//d_textureValid[i] = -1;
+	}
 }
 
 
@@ -117,24 +98,25 @@ GlWindow::handleEvent (mxEvent *event)
 {
 	static float oldrx = 0, oldry = 0, oldtz = 50, oldtx = 0, oldty = 0;
 	static int oldx, oldy;
+	static DWORD lastTimeIdle = 0, lastTimeMouse = 0;
+	DWORD currentTimeIdle, currentTimeMouse;
 
 	switch (event->event)
 	{
-	case mxEvent::MouseDown:
-		oldrx = d_rotX;
-		oldry = d_rotY;
-		oldtx = d_transX;
-		oldty = d_transY;
-		oldtz = d_transZ;
-		oldx = event->x;
-		oldy = event->y;
-		//setFlag (F_PAUSE, false);
+		case mxEvent::MouseDown:
+			oldrx = d_rotX;
+			oldry = d_rotY;
+			oldtx = d_transX;
+			oldty = d_transY;
+			oldtz = d_transZ;
+			oldx = event->x;
+			oldy = event->y;
 
-		break;
+			break;
 
-	case mxEvent::MouseWheel: //hypov8 not working when other gui elements are active
+		case mxEvent::MouseWheel:
 		{
-			if (event->zdelta<0)
+			if (event->zdelta < 0)
 				d_transZ += 10;
 			else
 				d_transZ -= 10;
@@ -142,107 +124,193 @@ GlWindow::handleEvent (mxEvent *event)
 		}
 		break;
 
-	case mxEvent::MouseDrag:
-		if (event->buttons & mxEvent::MouseLeftButton)
+		case mxEvent::MouseDrag:
 		{
-			if (event->modifiers & mxEvent::KeyShift)
+			//limit fps
+			currentTimeMouse = mx::getTickCount();
+			if (currentTimeMouse < lastTimeMouse + 30)
 			{
+				mx::sleep(2); //reduce cpu usage
+				return 0;
+			}
+			lastTimeMouse = currentTimeMouse;
+
+
+			if (event->buttons & mxEvent::MouseLeftButton)
+			{
+				if (event->modifiers & mxEvent::KeyShift)
+				{
 #if 0
-				d_transX = oldtx - (float) (event->x - oldx);
-				d_transY = oldty + (float) (event->y - oldy);
+					d_transX = oldtx - (float)(event->x - oldx);
+					d_transY = oldty + (float)(event->y - oldy);
 
-#else
-				/*float radAngle = -radians(degree);// "-" - clockwise
-				float x = point.x;
-				float y = point.y;
-				float rX = pivot.x + (x - pivot.x) * cos(radAngle) - (y - pivot.y) * sin(radAngle);
-				float rY = pivot.y + (x - pivot.x) * sin(radAngle) + (y - pivot.y) * cos(radAngle);*/
-				
-				float rotX = (float)(event->x - oldx)/180;
-				float s = (float)sin(rotX);
-				float c = (float)cos(rotX);
-				float modelX = d_modelOriginX;
-				float modelY = d_modelOriginZ;
-				float cameraX = (float)oldtx;
-				float cameraY = (float)oldtz;
+#else //todo fix this
+					/*float radAngle = -radians(degree);// "-" - clockwise
+					float x = point.x;
+					float y = point.y;
+					float rX = pivot.x + (x - pivot.x) * cos(radAngle) - (y - pivot.y) * sin(radAngle);
+					float rY = pivot.y + (x - pivot.x) * sin(radAngle) + (y - pivot.y) * cos(radAngle);*/
 
-				float rotatedX = (float)cos(rotX) * (cameraX - modelX) - (float)sin(rotX) * (cameraY - modelY) + modelX;
-				float rotatedZ = (float)sin(rotX) * (cameraX - modelX) + (float)cos(rotX) * (cameraY - modelY) + modelY;
+					float rotX = (float)(event->x - oldx) / 180;
+					float s = (float)sin(rotX);
+					float c = (float)cos(rotX);
+					float modelX = d_modelOriginX;
+					float modelY = d_modelOriginZ;
+					float cameraX = (float)oldtx;
+					float cameraY = (float)oldtz;
 
-				d_transX = rotatedX;
-				d_transZ = rotatedZ;
+					float rotatedX = (float)cos(rotX) * (cameraX - modelX) - (float)sin(rotX) * (cameraY - modelY) + modelX;
+					float rotatedZ = (float)sin(rotX) * (cameraX - modelX) + (float)cos(rotX) * (cameraY - modelY) + modelY;
 
-				//d_rotX = oldrx + (float) (event->y - oldy);
-				//d_rotY = oldry + (float) (event->x - oldx);
-				//}
+					d_transX = rotatedX;
+					d_transZ = rotatedZ;
+
+					//d_rotX = oldrx + (float) (event->y - oldy);
+					//d_rotY = oldry + (float) (event->x - oldx);
+					//}
 #endif
+				}
+				else
+				{
+					d_rotX = oldrx + (float)(event->y - oldy);
+					d_rotY = oldry + (float)(event->x - oldx);
+				}
 			}
-			else
+			else if (event->buttons & mxEvent::MouseRightButton)
 			{
-				d_rotX = oldrx + (float) (event->y - oldy);
-				d_rotY = oldry + (float) (event->x - oldx);
+				d_transZ = oldtz + ((float)(event->y - oldy) / 2);
 			}
-		}
-		else if (event->buttons & mxEvent::MouseRightButton)
-		{
-			d_transZ = oldtz + ((float)(event->y - oldy) / 2);
-		}
-		else if (event->buttons & mxEvent::MouseMiddleButton)
-		{
-			d_transX = oldtx - ((float)(event->x - oldx) / 10);
-			d_transY = oldty + ((float)(event->y - oldy) / 10);
-		}
+			else if (event->buttons & mxEvent::MouseMiddleButton)
+			{
+				d_transX = oldtx - ((float)(event->x - oldx) / 10);
+				d_transY = oldty + ((float)(event->y - oldy) / 10);
+			}
 
-		redraw ();
+			redraw();
+		}
 		break;
 
-	case mxEvent::Idle:
-	{
-		static DWORD timer = 0, lastTimer = 0;
-
-		if (getFlag (F_PAUSE))
-			return 0;
-		DWORD tmp = mx::getTickCount();
-		if (tmp - 30 < lastTimer) //hypov8 limit to 60 fps?
-			return 0;
-
-		lastTimer = timer;
-		timer = mx::getTickCount ();
-
-		float diff = (float) (timer - lastTimer);
-		fps = 1 / (diff / 1000.0f);
-		d_pol += diff / d_pitch;
-
-		if (d_pol < 0.0f)
-			d_pol = 0.0f; //hypov8 failsafe
-
-		if (d_pol > 1.0f)
+		case mxEvent::Idle:
 		{
-			d_pol = 0.0f;
-			d_currFrame++;
-			d_currFrame2++;
+			if (getFlag(F_PAUSE))
+			{
+				mx::sleep(10); //reduce cpu usage
+				return 0;
+			}
 
-			if (d_currFrame > d_endFrame)
-				d_currFrame = d_startFrame;
+			//limit fps
+			currentTimeIdle = mx::getTickCount();
+			if (currentTimeIdle < lastTimeIdle + 30)
+			{
+				mx::sleep(2); //reduce cpu usage
+				return 0;
+			}
 
-			if (d_currFrame2 > d_endFrame)
-				d_currFrame2 = d_startFrame;
+			float diff = (float)(currentTimeIdle - lastTimeIdle);
+			lastTimeIdle = currentTimeIdle;
+
+			if (!d_resumePaused)
+			{
+				d_pol += diff * (d_pitch / 1000.f); //IDC_PITCH: //slPitch
+				if (d_pol < 0.0f)
+					d_pol = 0.0f; //hypov8 failsafe
+			}
+			else //paused used. resume lerp
+			{
+				if (d_pol < 0.0f && d_pol > 1.0f)
+					d_pol = 0.0f;
+				d_resumePaused = false;
+			}
+
+			if (d_pol > 1.0f)
+			{
+				//try sync with framerate
+				d_pol -= 1.0f;
+				if (d_pol > 1.0f) //extended time...
+					d_pol = 0.0f;
+
+				d_currFrame++;
+				d_currFrame2++; //should this be fr1+1. and set below?
+
+				if (d_currFrame > d_endFrame)
+					d_currFrame = d_startFrame;
+
+				if (d_currFrame2 > d_endFrame)
+					d_currFrame2 = d_startFrame;
+
+				//update gui. current frame
+				g_mdxViewer->setFrameDisplay(d_currFrame);
+			}
+
+			redraw();
 		}
+		break;
 
-		redraw ();
-	}
-	break;
+		case mxEvent::MouseMove:
+		{
+#if WIN32
+			int mouseX = event->x;
+			int mouseY = event->y;
 
-	case mxEvent::KeyDown:
-	{
-		//nothing
-	}
-	break;
+			int glWinX = 0; //glw->x() -g_mdxViewer->x();
+			int glWinY = 0; //g_mdxViewer->UI_mb->getHeight(); // glw->y() - g_mdxViewer->y() - UI_mb->y();
+
+			int glWinW = w() + glWinX;
+			int glWinH = h() + glWinY;
+
+			//within opengl window
+			if (mouseX > glWinX && mouseX < glWinW &&
+				mouseY > glWinY && mouseY < glWinH)
+			{
+				// Grab focus as soon as the mouse is over the GL area
+				// Using Win32 directly for compatibility
+				if (GetFocus() != (HWND)getHandle()) {
+					SetFocus((HWND)getHandle());
+				}
+			}
+#endif
+		}
+		break;
+
+		//case mxEvent::KeyUp:
+
+		case mxEvent::KeyDown:
+		{
+#if 1
+			//hotkeys
+			switch (event->key)
+			{
+				case VK_F5:
+				{
+					reloadAllTextures();
+				}
+				break;
+
+				case 'P':
+				{
+					g_mdxViewer->setStatePaused();
+				}
+				break;
+
+				//IDC_RENDERMODE:
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+				{
+					int val = event->key - 49;
+					g_mdxViewer->setRenderMode(val);
+					redraw();
+				}
+				break;
+			}
+#endif
+		} //end mxEvent::KeyUp:
+		break;
 
 	}
 	return 1;
 }
-
 
 
 void
@@ -254,7 +322,7 @@ GlWindow::draw ()
 
 	glViewport (0, 0, w (), h ());
 
-	if (getFlag (F_BACKGROUND) && d_textureNames[TEXTURE_BACKGROUND])
+	if (getFlag (F_BACKGROUND) && d_textureValid[TEXTURE_BACKGROUND])
 	{
 		glMatrixMode (GL_PROJECTION);
 		glLoadIdentity ();
@@ -271,10 +339,10 @@ GlWindow::draw ()
 
 		glColor4f (1.0f, 1.0f, 1.0f, 0.3f);
 		glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
-		glBindTexture (GL_TEXTURE_2D, d_textureNames[TEXTURE_BACKGROUND]);
+		glBindTexture (GL_TEXTURE_2D, d_textureGLID[TEXTURE_BACKGROUND]);
 		
+		//start plane
 		glBegin (GL_QUADS);
-
 		glTexCoord2f (0, 0);
 		glVertex2f (0, 0);
 
@@ -286,9 +354,6 @@ GlWindow::draw ()
 
 		glTexCoord2f (1, 0);
 		glVertex2f (1, 0);
-
-	
-		
 		glEnd ();
 
 		glPopMatrix ();
@@ -296,37 +361,27 @@ GlWindow::draw ()
 
 	glMatrixMode (GL_PROJECTION);
 	glLoadIdentity ();
-	gluPerspective (65.0f, (GLfloat) w () / (GLfloat) h (), 1.0f, 2048.0f); //hypov8 todo: increase for heli?
+	gluPerspective (65.0f, (GLfloat) w () / (GLfloat) h (), 1.0f, 4096.0f); //hypov8 todo: zfar increase for heli? was 2048
 
 	glMatrixMode (GL_MODELVIEW);
 	glPushMatrix ();
-	//gluLookAt(-10, 0, 0, 0, 0, 0, 0, 1, 0);
-	//gluLookAt(d_transX, d_transY, d_transZ, 100, 20, 20, 1, 0, 0);//hypo
 	glLoadIdentity ();
 
 	if (getFlag (F_LIGHT))
 	{
-		GLfloat lp[4] = { 0, 0, d_transZ, 1 };
+		GLfloat lp[4] = { 0, 0, 1.0, 0.0f }; //directional light
 		GLfloat lc[4] = { d_lightColor[0], d_lightColor[1], d_lightColor[2], 1.0f };
+		GLfloat amb[4] = {
+		(d_lightColor[0]+ d_bias)*0.5f,
+		(d_lightColor[1]+ d_bias)*0.5f,
+		(d_lightColor[2]+ d_bias)*0.5f,
+		1.0f };
 
-		glLightfv (GL_LIGHT0, GL_POSITION, lp);
-		glLightfv (GL_LIGHT0, GL_DIFFUSE, lc);
+		glLightfv(GL_LIGHT0, GL_POSITION, lp);
+		glLightfv(GL_LIGHT0, GL_AMBIENT, amb);
+		glLightfv(GL_LIGHT0, GL_DIFFUSE, lc);
 	}
 
-	glPixelTransferf (GL_RED_SCALE, 1.0f + 5.0f * d_bias);
-	glPixelTransferf (GL_GREEN_SCALE, 1.0f + 5.0f * d_bias);
-	glPixelTransferf (GL_BLUE_SCALE, 1.0f + 5.0f * d_bias);
-
-
-/*	glPixelTransferf (GL_RED_SCALE, 99.0f);
-	glPixelTransferf (GL_GREEN_SCALE, 99.0f);
-	glPixelTransferf (GL_BLUE_SCALE, 99.0f);
-
-	glPixelTransferf (GL_RED_BIAS, 99.0f);
-	glPixelTransferf (GL_GREEN_BIAS, 99.0f);
-	glPixelTransferf (GL_BLUE_BIAS, 99.0f);*/
-
-	//gluLookAt(-d_transX, -d_transY, -d_transZ, 100, 0, 0, 1, 0, 0);
 
 	glTranslatef (-d_transX, -d_transY, -d_transZ);
 
@@ -366,13 +421,16 @@ GlWindow::draw ()
 		glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
 		glDisable (GL_TEXTURE_2D);
 		glDisable (GL_CULL_FACE);
-		glDisable (GL_DEPTH_TEST);
+		glCullFace(GL_FRONT); //reverse windindings=back?
+		
+		glEnable(GL_DEPTH_TEST);
+		//glDisable (GL_DEPTH_TEST);
 	}
 	else if (d_renderMode == RM_FLATSHADED ||
 			d_renderMode == RM_SMOOTHSHADED)
 	{
-		glColor3f (d_fgColor[0], d_fgColor[1], d_fgColor[2]);
-		GLfloat md[4] = { d_fgColor[0], d_fgColor[1], d_fgColor[2], 1.0f };
+		glColor3f (d_faceColor[0], d_faceColor[1], d_faceColor[2]);
+		GLfloat md[4] = { d_faceColor[0], d_faceColor[1], d_faceColor[2], 1.0f };
 		glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, md);
 
 		glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
@@ -388,95 +446,92 @@ GlWindow::draw ()
 	else if (d_renderMode == RM_TEXTURED)
 	{
 		glColor3f (1.0f, 1.0f, 1.0f);
-		GLfloat md[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-		glMaterialfv (GL_FRONT_AND_BACK, GL_DIFFUSE, md);
-		
 		glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
 		glEnable (GL_TEXTURE_2D);
 		glEnable (GL_CULL_FACE);
 		glEnable (GL_DEPTH_TEST);
 		glShadeModel (GL_SMOOTH);
-		
 	}
 
-	int hasTexture = 0;
 
-	if (d_models[0])
+	//loop though all models. render mesh
+	for (mdlIdx = 0; mdlIdx < MAX_MODELS; mdlIdx++)
 	{
+		if (d_models[mdlIdx] == 0)
+			continue;
+
+		if (d_renderMode == RM_WIREFRAME
+			&& (getFlag(F_WIREFRAME) || getFlag(F_WIRE_OGL1) || getFlag(F_WIRE_OGL2)))
+			continue; //break...
+
+		int numFrames = d_models[mdlIdx]->header.numFrames;
 		if (d_renderMode == RM_TEXTURED)
 		{
-			if (!d_textureNames[TEXTURE_MODEL_0])
-			{
-				GLfloat md[4] = { d_fgColor[0], d_fgColor[1], d_fgColor[2], 1.0f };
-				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, md);
-				//glDisable(GL_TEXTURE_2D);
-			}
+			GLfloat md[4];
+			glBindTexture(GL_TEXTURE_2D, d_textureGLID[mdlIdx]);
+			if (!d_textureValid[mdlIdx])
+				vec4Set(md, d_faceColor[0], d_faceColor[1], d_faceColor[2], 1.0f);
 			else
-			{
-				hasTexture = 1;
-			}
+				vec4Set(md, 1.0f, 1.0f, 1.0f, 1.0f);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, md);
 		}
 
-		glBindTexture (GL_TEXTURE_2D, d_textureNames[TEXTURE_MODEL_0]);
-		if (d_currFrame < d_models[0]->header.numFrames &&
-			d_currFrame2 < d_models[0]->header.numFrames)
+		if (d_currFrame < numFrames && d_currFrame2 < numFrames)
 		{
-			mdx_drawModel(d_models[0], d_currFrame, d_currFrame2, d_pol, 0, 0);
-			mdx_drawModel_dev(d_models[0], d_currFrame, d_currFrame2, d_pol, 1,
-				d_vertexIndex, d_vertexUseFace, //HYPOVERTEX
-				getFlag(F_VNORMS), getFlag(F_GRID), getFlag(F_HITBOX), 
-				d_debugColor, d_gridColor);
+			mdx_drawModel(d_models[mdlIdx], 
+				d_currFrame, d_currFrame2, 
+				d_pol, //fraction
+				getFlag(F_INTERPOLATE),
+				0);
 		}
+		else
+		{
+			mdx_drawModel(d_models[mdlIdx], 
+				numFrames - 1, d_currFrame2, 
+				0, 
+				0, 
+				1); // static, show in red
+		}
+
 	}
 
-	//loop though all models. render textured?
-	for (mdlIdx = 1; mdlIdx < MAX_MODELS; mdlIdx++)
+	//loop though all models. render dev
+	for (mdlIdx = 0; mdlIdx < MAX_MODELS; mdlIdx++)
 	{
 		if (d_models[mdlIdx])
 		{
-			int numFrm = d_models[mdlIdx]->header.numFrames;
-			if (d_renderMode == RM_TEXTURED)
-			{
-				
-				if (!d_textureNames[mdlIdx]) //TEXTURE_MODEL_1
-				{
-					GLfloat md[4] = { d_fgColor[0], d_fgColor[1], d_fgColor[2], 1.0f };
-					glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, md);
-					//glDisable(GL_TEXTURE_2D);
-				}
-				else
-				{
-					GLfloat md[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-					glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, md);
-					hasTexture = 1;
-				}
-			}
-
-			glBindTexture(GL_TEXTURE_2D, d_textureNames[mdlIdx]); //TEXTURE_MODEL_1
+			int numFrames = d_models[mdlIdx]->header.numFrames;
 
 			// multi model with differn animation count?
-			if (d_currFrame < numFrm && d_currFrame2 < numFrm)
+			if (d_currFrame < numFrames && d_currFrame2 < numFrames)
 			{
-				mdx_drawModel(d_models[mdlIdx], d_currFrame, d_currFrame2, d_pol, 0, 0);
-				mdx_drawModel_dev(d_models[mdlIdx], d_currFrame, d_currFrame2, d_pol, 1,
-					-1, 0, getFlag(F_VNORMS), getFlag(F_GRID), getFlag(F_HITBOX),
-					d_debugColor, d_gridColor);
+				mdx_drawModel_dev(
+					d_models[mdlIdx], 
+					d_currFrame, d_currFrame2, 
+					d_pol,  //fraction
+					getFlag(F_INTERPOLATE), //lerp?
+					d_vertexIndex, d_vertexUseFace,
+					getFlag(F_VNORMS), getFlag(F_GRID), getFlag(F_HITBOX), 
+					getFlag(F_WIREFRAME), getFlag(F_WIRE_OGL1), getFlag(F_WIRE_OGL2),
+					d_debugColor1, d_debugColor2, d_gridColor, d_wfColor);
 			}
 			else
 			{
-				mdx_drawModel(d_models[mdlIdx], numFrm-1, d_currFrame2, 0, 1, 1); // static, show in red
-				mdx_drawModel_dev(d_models[mdlIdx], numFrm-1, -1, 0, 0,
-					-1, 0, getFlag(F_VNORMS), getFlag(F_GRID), getFlag(F_HITBOX),
-					d_debugColor, d_gridColor);
+				mdx_drawModel_dev(
+					d_models[mdlIdx], 
+					numFrames -1, -1, 
+					0, //fraction
+					0, //no lerp
+					d_vertexIndex, d_vertexUseFace,
+					getFlag(F_VNORMS), getFlag(F_GRID), getFlag(F_HITBOX), 
+					getFlag(F_WIREFRAME), getFlag(F_WIRE_OGL1), getFlag(F_WIRE_OGL2),
+					d_debugColor1, d_debugColor2, d_gridColor, d_wfColor);
 			}
 		}
 	}
-	//hypov8 only disable if no valid skin
-	if (d_renderMode == RM_TEXTURED && !hasTexture)
-		glDisable(GL_TEXTURE_2D);
 
 
-	if (getFlag (F_WATER) && d_textureNames[TEXTURE_WATER])
+	if (getFlag (F_WATER) && d_textureValid[TEXTURE_WATER])
 	{
 		glDisable (GL_LIGHTING);
 
@@ -485,7 +540,7 @@ GlWindow::draw ()
 		glEnable (GL_BLEND);
 		glColor4f (1.0f, 1.0f, 1.0f, 0.3f);
 		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glBindTexture (GL_TEXTURE_2D, d_textureNames[TEXTURE_WATER]);
+		glBindTexture (GL_TEXTURE_2D, d_textureGLID[TEXTURE_WATER]);
 
 		glBegin (GL_QUADS);
 		glTexCoord2f (0.0f, 0.0f);
@@ -505,36 +560,33 @@ GlWindow::draw ()
 
 
 
-mdx_model_t * GlWindow::loadModel (const char *filename, int pos)
+mdx_model_t * 
+GlWindow::loadModel (const char *filename, int pos, bool getSkin)
 {
-	char ext[256];
+	char ext[MAX_PATH_LEN];
 
 	if (d_models[pos] != 0)
 	{
 		mdx_freeModel (d_models[pos]);
-		d_models[pos] = 0;
-		setModelIndex(); //hypov8
-
-		modelFileNames[pos][0] = '\0'; //hypov8 models
-		modelTexNames[pos][0] = '\0'; //hypov8 textures
+		d_models[pos] = NULL;
+		d_textureValid[pos] = false;
+		d_modelFileNames[pos][0] = '\0'; //hypov8 models
+		d_modelTexNames[pos][0] = '\0'; //hypov8 textures
 	}
 
 	if (!filename || !strlen (filename))
 		return 0;
 
-
 	strcpy_s(ext, sizeof(ext), mx_getextension(filename));
 	if (!mx_strncasecmp(ext, ".mdx", 4))
 	{
 		d_models[pos] = mdx_readModel(filename, d_debugLoad);
-		setModelIndex(); //hypov8
 		if (!d_models[pos])
 			return 0;
 	}
 	else if (!mx_strncasecmp(ext, ".md2", 4))
 	{
-		d_models[pos] = md2_Parse_readModel(filename, d_debugLoad);
-		setModelIndex(); //hypov8
+		d_models[pos] = md2_readModel_to_mdx(filename, d_debugLoad);
 		if (!d_models[pos])
 			return 0;
 	}
@@ -542,11 +594,11 @@ mdx_model_t * GlWindow::loadModel (const char *filename, int pos)
 		return 0;
 	
 	//set skins to main/ and use the models internal file name
-	if (d_models[pos]->skins && d_models[pos]->skins[0][0] != '\0')
+	if (getSkin && d_models[pos]->skins && d_models[pos]->skins[0][0] != '\0')
 	{
 		int idx = 0;
-		char in[256]; 
-		char out[256];
+		char in[MAX_PATH_LEN];
+		char out[MAX_PATH_LEN];
 		FILE *file = NULL;
 
 		strcpy_s(in, sizeof(in), filename);
@@ -578,7 +630,7 @@ mdx_model_t * GlWindow::loadModel (const char *filename, int pos)
 			}
 			else if (isPlayr )//failed.. check for player model skins 
 			{
-				char fName[256];
+				char fName[MAX_PATH_LEN];
 				strcpy_s(fName, sizeof(fName), mx_getfilename(filename));
 				if (!mx_strcasecmp(fName, "head.mdx"))
 				{
@@ -603,33 +655,173 @@ mdx_model_t * GlWindow::loadModel (const char *filename, int pos)
 			strcat_s(out, sizeof(out), mx_getfilename(d_models[pos]->skins[0]));
 		}
 		//set skin name
-		strcpy_s(modelTexNames[pos], sizeof(modelTexNames[pos]), out); //hypov8 textures. 
+		strcpy_s(d_modelTexNames[pos], sizeof(d_modelTexNames[pos]), out); //hypov8 textures. 
 	}
 
 	//copy fie name
-	strcpy_s (modelFileNames[pos], sizeof(modelFileNames[pos]), filename);
+	strcpy_s (d_modelFileNames[pos], sizeof(d_modelFileNames[pos]), filename);
 
 	return d_models[pos];
 }
 
 
+void
+GlWindow::bindWhiteImage(int imgIndex)
+{
+	byte data[4] = {255, 255, 255, 255};
+
+	glBindTexture(GL_TEXTURE_2D, d_textureGLID[imgIndex]);
+	glTexImage2D(GL_TEXTURE_2D,
+		0, //mip 
+		GL_RGBA8, //
+		1, 1, // w\h
+		0, GL_RGBA, GL_UNSIGNED_BYTE, data
+	);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+}
+
+void 
+GlWindow::reloadAllTextures()
+{
+	int i;
+	for (i = 0; i < MAX_TEXTURES; i++)
+	{
+		loadTexture(d_modelTexNames[i], i);
+	}
+
+	g_mdxViewer->setRenderMode(3); //set mode to view skins
+	redraw();
+}
+
+
+//bilinear interpolation
+int 
+GlWindow::clamp(float value)
+{
+	if (value < 0.01) 
+		return 0;
+	if (value > 255.01f) 
+		return 255;
+	return (int)value;
+}
+
+void 
+GlWindow::ResampleTexture(byte *in, int inwidth, int inheight, byte *out, int outwidth, int outheight)
+{
+	float x_ratio = (float)(inwidth - 1) / outwidth;
+	float y_ratio = (float)(inheight - 1) / outheight;
+
+	for (int y = 0; y < outheight; y++) 
+	{
+		for (int x = 0; x < outwidth; x++) 
+		{
+			// Determine the position in the input image
+			float gx = x * x_ratio;
+			float gy = y * y_ratio;
+
+			int gxi = (int)gx;
+			int gyi = (int)gy;
+
+			// Calculate the fractional parts
+			float x_diff = gx - (float)gxi;
+			float y_diff = gy - (float)gyi;
+
+			// Get the indices of the surrounding pixels
+			int index1 = (gyi * inwidth + gxi) * 3;           // Top-left
+			int index2 = (gyi * inwidth + gxi + 1) * 3;       // Top-right
+			int index3 = ((gyi + 1) * inwidth + gxi) * 3;     // Bottom-left
+			int index4 = ((gyi + 1) * inwidth + gxi + 1) * 3; // Bottom-right
+
+			// Interpolate for R, G, B channels
+			for (int i = 0; i < 3; i++) 
+			{
+				float top =    (float)in[index1 + i] * (1.f - x_diff) + (float)in[index2 + i] * x_diff;
+				float bottom = (float)in[index3 + i] * (1.f - x_diff) + (float)in[index4 + i] * x_diff;
+				out[(y * outwidth + x) * 3 + i] = clamp(top * (1.f - y_diff) + bottom * y_diff);
+			}
+		}
+	}
+}
+
+
+void 
+GlWindow::pixelTransfer_set(float value)
+{
+	glPixelTransferf(GL_RED_SCALE, value);
+	glPixelTransferf(GL_GREEN_SCALE, value);
+	glPixelTransferf(GL_BLUE_SCALE, value);
+}
+
+void 
+GlWindow::pixelTransfer_reset()
+{
+	glPixelTransferf(GL_RED_SCALE, 1.0f);
+	glPixelTransferf(GL_GREEN_SCALE, 1.0f);
+	glPixelTransferf(GL_BLUE_SCALE, 1.0f);
+}
+
+
+//upload 24 bit image, resized to power of 2 if neded.
+int
+GlWindow::gl_uploadTexture24(byte *data, int width, int height, int gl_ID)
+{
+	int scaled_width, scaled_height;
+	byte *uploadData = data;
+
+	// convert to exact power of 2 sizes
+	for (scaled_width = 4; scaled_width < width; scaled_width <<= 1)	
+	{	;	}
+	for (scaled_height = 4; scaled_height < height; scaled_height <<= 1)	
+	{	;	}
+
+
+	if (scaled_width != width || scaled_height != height)
+	{
+		byte *scaledData = (byte*)malloc(scaled_width*scaled_height*3);
+		if (!scaledData)
+			return 0;
+		ResampleTexture((byte *)data, width, height, scaledData, scaled_width, scaled_height);
+
+		//set new sizes
+		uploadData = scaledData;
+		width = scaled_width ;
+		height = scaled_height;
+	}
+
+	pixelTransfer_set(1.0f + 2.0f * d_bias);
+
+	//upload image
+	glBindTexture(GL_TEXTURE_2D, gl_ID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, uploadData);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	pixelTransfer_reset();
+
+	//free new image data
+	if (uploadData != data)
+		free(uploadData);
+
+	return 1;
+}
 
 int
 GlWindow::loadTexture (const char *filename, int imgIndex)
 {
 	if (!filename || !strlen (filename))
 	{
-		if (d_textureNames[imgIndex])
-			d_textureNames[imgIndex] = 0;
-
-		modelTexNames[imgIndex][0] = '\0'; //hypov8 textures
-
+		d_textureValid[imgIndex] = false;
+		d_modelTexNames[imgIndex][0] = '\0'; //hypov8 textures
+		bindWhiteImage(imgIndex);
 		return 0;
 	}
 
 	mxImage *image = 0;
-	char ext[256];
-	int isTga = 0;
+	char ext[MAX_PATH_LEN];
+
 	strcpy_s(ext, sizeof(ext), mx_getextension(filename));
 
 	if (!mx_strcasecmp(ext, ".pcx"))
@@ -637,63 +829,34 @@ GlWindow::loadTexture (const char *filename, int imgIndex)
 	else if (!mx_strcasecmp(ext, ".tga"))
 		image = mxTgaRead(filename);
 
-	//todo fallback?
-
-
 	if (image)
 	{
-		byte *out = NULL;
-		//hypov8 store texture names
-		strcpy_s (modelTexNames[imgIndex], sizeof(modelTexNames[imgIndex]), filename);
-
-		d_textureNames[imgIndex] = (unsigned int)imgIndex+1; //hypov8
-
-		//convert pallet to 24 it
-		if (image->bpp == 8)
+		//convert palette image to 24bit if needed
+		if (!image->convert8to24bit())
 		{
-			int ptr = 0;
-			byte *pal = (byte *)image->palette;
-			byte *data = (byte *)image->data;
-			out = (byte *)malloc(image->width * image->height * 3);
-
-			for (int y = 0; y < image->height; y++)
-			{
-				for (int x = 0; x < image->width; x++)
-				{
-					if (image->bpp == 8)
-					{
-						out[ptr++] = pal[data[y * image->width + x] * 3 + 0];
-						out[ptr++] = pal[data[y * image->width + x] * 3 + 1];
-						out[ptr++] = pal[data[y * image->width + x] * 3 + 2];
-					}
-					else if (image->bpp == 24)
-					{	//hypov8 todo: this is not 100% working (ingame invalid to)
-						out[ptr++] = data[(y* (image->width * 3) + x)]; //red
-						out[ptr++] = data[(y* (image->width * 3) + (image->width * 1) + x)]; //green
-						out[ptr++] = data[(y* (image->width * 2) + (image->width * 2) + x)]; //blue
-					}
-				}
-			}
+			delete image;
 		}
+		else
+		{
+			d_textureValid[imgIndex] = true;
+			d_textureRez[imgIndex][0] = image->width;
+			d_textureRez[imgIndex][1] = image->height;
 
-		glBindTexture(GL_TEXTURE_2D, d_textureNames[imgIndex]);
-		glTexImage2D(GL_TEXTURE_2D, 0, 3, image->width, image->height, 0, GL_RGB, GL_UNSIGNED_BYTE, (image->bpp == 8)? out: image->data);
-		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			strcpy_s (d_modelTexNames[imgIndex], sizeof(d_modelTexNames[0]), filename);
+			gl_uploadTexture24((byte*)image->data, image->width, image->height, d_textureGLID[imgIndex]);
 
-		if (out) free(out);
-
-		// setm loadTexture(glw->modelTexNames[pos], pos);
-		//g_mdxViewer->glw->setModelInfo(model, pos);
-
-		delete image;
-		return imgIndex+1;
+			delete image;
+			return imgIndex + 1;
+		}
 	}
+
+	//white image
+	d_textureValid[imgIndex] = false;
+	//modelTexNames[imgIndex][0] = 0;
+	bindWhiteImage(imgIndex);
 
 	return 0;
 }
-
 
 
 void
@@ -701,7 +864,6 @@ GlWindow::setRenderMode (int mode)
 {
 	d_renderMode = mode;
 }
-
 
 
 void
@@ -740,7 +902,6 @@ GlWindow::setFrameInfo (int startFrame, int endFrame)
 }
 
 
-
 void
 GlWindow::setPitch (float pitch)
 {
@@ -748,7 +909,6 @@ GlWindow::setPitch (float pitch)
 	if (d_pitch < 1.0f) //fix devide by zero
 		d_pitch = 1.0f;
 }
-
 
 
 void
@@ -760,13 +920,12 @@ GlWindow::setBGColor (float r, float g, float b)
 }
 
 
-
 void
-GlWindow::setFGColor (float r, float g, float b)
+GlWindow::setFaceColor(float r, float g, float b)
 {
-	d_fgColor[0] = r;
-	d_fgColor[1] = g;
-	d_fgColor[2] = b;
+	d_faceColor[0] = r;
+	d_faceColor[1] = g;
+	d_faceColor[2] = b;
 }
 
 
@@ -789,11 +948,19 @@ GlWindow::setLightColor (float r, float g, float b)
 
 
 void
-GlWindow::setDebugColor (float r, float g, float b)
+GlWindow::setDebugColor1 (float r, float g, float b)
 {
-	d_debugColor[0] = r;
-	d_debugColor[1] = g;
-	d_debugColor[2] = b;
+	d_debugColor1[0] = r;
+	d_debugColor1[1] = g;
+	d_debugColor1[2] = b;
+}
+
+void
+GlWindow::setDebugColor2 (float r, float g, float b)
+{
+	d_debugColor2[0] = r;
+	d_debugColor2[1] = g;
+	d_debugColor2[2] = b;
 }
 
 void
@@ -804,11 +971,6 @@ GlWindow::setGridColor(float r, float g, float b)
 	d_gridColor[2] = b;
 }
 
-/*void
-GlWindow::setLoadInvalid(int value)
-{
-	d_debugLoad = value;
-}*/
 
 void
 GlWindow::setFlag (int flag, bool enable)
@@ -817,34 +979,46 @@ GlWindow::setFlag (int flag, bool enable)
 		d_flags |= flag;	// set flag
 	else
 		d_flags &= ~flag;	// clear flag
-
-	mdx_setStyle ((int) getFlag (F_GLCOMMANDS), (int) getFlag (F_INTERPOLATE));
 }
-
 
 
 void
 GlWindow::setBrightness (int value)
 {
-	d_bias = (float) value / 100.0f;
-	redraw ();
-}
+	static int lastValue = -1;
 
-
-void
-GlWindow::setModelIndex (void)
-{
-	int i;
-
-	d_modelIndex = 6;
-
-	for (i = 0;i < MAX_MODELS; i++)
+	if (lastValue != value)
 	{
-		if (!d_models[i]) {
-			d_modelIndex = i;
-			break;
+		d_bias = (float) value / (float)BRIGHTNESS_LEVELS_MAX;
+
+		if (lastValue != -1) //ignore init
+		{
+			//reload images
+			for (int i = 0; i < MAX_TEXTURES; i++)
+			{
+				loadTexture(d_modelTexNames[i], i);
+			}
+
+			redraw();
+			Sleep(20); //update has no rate limit
 		}
+
+		//prevent constant updates
+		lastValue = value;
 	}
 }
 
+
+int 
+GlWindow::getFreeModelIndex()
+{
+	int i = 0;
+
+	for (; i < MAX_MODELS; i++)
+	{
+		if (!d_models[i])
+			break;
+	}
+	return i;
+}
 

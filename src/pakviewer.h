@@ -9,6 +9,16 @@
 
 #define IDC_PAKVIEWER		1001
 
+#ifndef INCLUDED_COMMON
+	#include "common.h"
+#endif
+
+#ifndef MAX_PATH_LEN
+	#define MAX_PATH_LEN 256 //move to common...
+#endif
+
+
+
 
 typedef struct
 {
@@ -19,13 +29,13 @@ typedef struct
 
 
 
-#ifdef __cpluspus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 int pak_ExtractFile (const char *pakFile, const char *lumpName, char *outFile);
 
-#ifdef __cpluspus
+#ifdef __cplusplus
 }
 #endif
 
@@ -38,13 +48,15 @@ class GlWindow;
 
 class PAKViewer : public mxWindow
 {
-	char d_pakFile[256];
-	char d_currLumpName[256];
+	char d_pakFile[MAX_PATH_LEN];
+	char d_currLumpName[MAX_PATH_LEN];
 	bool d_loadEntirePAK;
 	mxTreeView *UI_tvPAK;
 	mxPopupMenu *pmMenu;
 	mxTab *UI_pakTab;
 	//GlWindow *glw; hypov8
+private:
+	int pak_ExtractFile(const char *pakFile, const char *lumpName, char *outFile);
 
 public:
 	// CREATORS

@@ -5,10 +5,7 @@
 #include <mx/gl.h>
 #include "common.h"
 //#include "anorms.h"
-//#include "mdx.h"
-
-//static int g_glcmds = 1; /* use glcommands */
-static int g_interp = 1; /* interpolate frames */
+#include "mdx.h"
 
 
 //md2 compat
@@ -108,6 +105,56 @@ int mdx_readFrameData(FILE *file, mdx_frame_t **pFrames, byte *buffer,
 	return 1;
 }
 
+void mdx_cleanTrailingSlash(char *path)
+{
+	int len = strlen(path);
+	if (len && (path[len - 1] == '/' || path[len - 1] == '\\'))
+		path[len - 1] = 0;
+}
+
+void mdx_read_playerINI(const char *path, char *path_head, char *path_body, char *path_legs)
+{
+	FILE *file=NULL;
+	int len;
+	char line[256];
+	char *ptr, modelPath[256];
+
+	path_head[0] = 0; path_body[0] = 0, path_legs[0] = 0;
+
+	sprintf_s(modelPath, 256, "%s\\skinfolder.txt", path);
+	if (fopen_s(&file, modelPath, "r"))
+		return;
+
+	ptr = strstr(path, "\\players\\");
+	if (!ptr)
+		return;
+
+	len = ptr - path;
+	if (len > 255)
+		len = 255;
+	strncpy_s(modelPath, 256, path, len);
+
+	//get line
+	while (fgets(line, 256, file))
+	{
+		//clean line ending
+		line[strcspn(line, "\n")] = 0;
+		line[strcspn(line, "\r")] = 0;
+
+		if (!_strnicmp(line, "head:", 5))
+			sprintf_s(path_head, 256, "%s\\%s", modelPath, line + 5);
+		else if (!_strnicmp(line, "body:", 5))
+			sprintf_s(path_body, 256, "%s\\%s", modelPath, line + 5);
+		else if (!_strnicmp(line, "legs:", 5))
+			sprintf_s(path_legs, 256, "%s\\%s", modelPath, line + 5);
+	}
+	fclose(file);
+
+	//clean string ending
+	mdx_cleanTrailingSlash(path_head);
+	mdx_cleanTrailingSlash(path_body);
+	mdx_cleanTrailingSlash(path_legs);
+}
 
 
 /*
@@ -132,9 +179,6 @@ mdx_readModel (const char *filename, int debugLoad)
 		return 0;
 	}
 
-
-	//g_glcmds = 0; /* use glcommands */
-	//g_interp = 1; /* interpolate frames */
 
 	/* initialize model and read header */
 	memset (model, 0, sizeof (mdx_model_t));
@@ -322,18 +366,6 @@ mdx_freeModel (mdx_model_t *model)
 
 
 /*
- * set draw style, either with glcommands, interpolated
- */
-void
-mdx_setStyle (int glcmds, int interp)
-{
-	//g_glcmds = glcmds;
-	g_interp = interp;
-}
-
-
-
-/*
  * center model 
  *
  */
@@ -343,12 +375,15 @@ mdx_getBoundingBox (mdx_model_t *model, float *outMin, float *outMax, int frame)
 #if 1
 	int i, j;
 	float min[3], max[3];
-
-	if (frame >= model->header.numFrames)
-		frame = model->header.numFrames - 1;
 	 
 	min[0] = min[1] = min[2] =  999999.0f;
 	max[0] = max[1] = max[2] = -999999.0f;
+
+	if (!model)
+		return;
+
+	if (frame >= model->header.numFrames)
+		frame = model->header.numFrames - 1;
 
 	/* get bounding box */
 	for (i = 0; i < model->header.numVertices; i++)
@@ -466,76 +501,323 @@ mdx_getBoundingBoxExport(mdx_model_t *model, float *minmax, int frame)
 	minmax[5] = maxz;*/
 }
 
-
-/*
- * draw with glcommands
- *
- */
-void
-mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int isMissingFrame)
+void mdx_renderTriMidDot(mdx_model_t *model, int frame1, int frame2, int index0, int index1, int index2, float pol)
 {
-	int i = 0;
-	int something;
-	int val = model->glCommandBuffer[i++];
-	float rgba[4];
+	//float ver1[3], ver2[3];
 	float x1, y1, z1;
 	float x2, y2, z2;
-	int count;
 
-	glGetFloatv(GL_CURRENT_COLOR, rgba);
-	if (isMissingFrame && frame2 > model->header.numFrames)
-		glColor3f(1.0f, 0.0f, 0.0f); //set red
+	//get triangle middle
+	float *v1 = model->frames[frame1].vertices[index0].vertex;
+	float *v2 = model->frames[frame1].vertices[index1].vertex;
+	float *v3 = model->frames[frame1].vertices[index2].vertex;
 
-#if 0 //disabled. software texture loading
-	//todo:
-	// cant export mdx without glCommands.. disabled
-	if (model->isMD2 && !model->header.numGlCommands)
-	{
-		glBegin(GL_TRIANGLES);
-		for (i = 0; i < model->header.numTriangles; i++)
-		{
-			int vIdcX = model->triangles[i].vertexIndices[0];
-			int vIdcY = model->triangles[i].vertexIndices[1];
-			int vIdcZ = model->triangles[i].vertexIndices[2];
+	x1 = (v1[0] + v2[0] + v3[0]) / 3.0f;
+	y1 = (v1[1] + v2[1] + v3[1]) / 3.0f;
+	z1 = (v1[2] + v2[2] + v3[2]) / 3.0f;
 
-			float *v_X = model->frames[frame1].vertices[vIdcX].vertex;
-			float *n_X = model->frames[frame1].vertices[vIdcX].normal;
-			float *v_Y = model->frames[frame1].vertices[vIdcY].vertex;
-			float *n_Y = model->frames[frame1].vertices[vIdcY].normal;
-			float *v_Z = model->frames[frame1].vertices[vIdcZ].vertex;
-			float *n_Z = model->frames[frame1].vertices[vIdcZ].normal;
-			float s = model->;
-			float t = ;
+	if (pol > 0.0f) //frame2 > -1)
+	{	//interpolate
+		float *v1_ = model->frames[frame2].vertices[index0].vertex;
+		float *v2_ = model->frames[frame2].vertices[index1].vertex;
+		float *v3_ = model->frames[frame2].vertices[index2].vertex;
+		x2 = (v1_[0] + v2_[0] + v3_[0]) / 3.0f;
+		y2 = (v1_[1] + v2_[1] + v3_[1]) / 3.0f;
+		z2 = (v1_[2] + v2_[2] + v3_[2]) / 3.0f;
 
-			glTexCoord2f((float)model->texCoords[t->textureIndices[2]].s / (float)model->header.skinWidth,
-				(float)model->texCoords[t->textureIndices[2]].t / (float)model->header.skinHeight);
-
-			glTexCoord2f(s, t);
-			glNormal3f(x1, y1, z1);
-			glVertex3f(x2, y2, z2);
-
-
-			for (j = 0; j < 3; j++)
-			{ }
-
-				//normal dir
-			x1 = model->frames[frame1].vertices[i].normal[0];
-			y1 = model->frames[frame1].vertices[index].normal[1];
-			z1 = model->frames[frame1].vertices[index].normal[2];
-			//vertex pos			
-			x2 = model->frames[frame1].vertices[index].vertex[0];
-			y2 = model->frames[frame1].vertices[index].vertex[1];
-			z2 = model->frames[frame1].vertices[index].vertex[2];
-		}
-		glEnd();
+		x1 += pol * (x2 - x1);
+		y1 += pol * (y2 - y1);
+		z1 += pol * (z2 - z1);
 	}
-#endif
+
+
+	//draw dot
+	glVertex3f(x1, y1,z1);
+
+}
+
+void mdx_renderLine(mdx_model_t *model, int frame1, int frame2, int index1, int index2, float pol)
+{
+	float ver1[3], ver2[3];
+	
+	//vertex pos			
+	ver1[0] = model->frames[frame1].vertices[index1].vertex[0];
+	ver1[1] = model->frames[frame1].vertices[index1].vertex[1];
+	ver1[2] = model->frames[frame1].vertices[index1].vertex[2];
+	ver2[0] = model->frames[frame1].vertices[index2].vertex[0];
+	ver2[1] = model->frames[frame1].vertices[index2].vertex[1];
+	ver2[2] = model->frames[frame1].vertices[index2].vertex[2];
+
+	//interpolate
+	if (pol > 0.0f)
+	{
+		//vertex pos				
+		ver1[0] += pol * (model->frames[frame2].vertices[index1].vertex[0] - ver1[0]);
+		ver1[1] += pol * (model->frames[frame2].vertices[index1].vertex[1] - ver1[1]);
+		ver1[2] += pol * (model->frames[frame2].vertices[index1].vertex[2] - ver1[2]);
+		ver2[0] += pol * (model->frames[frame2].vertices[index2].vertex[0] - ver2[0]);
+		ver2[1] += pol * (model->frames[frame2].vertices[index2].vertex[1] - ver2[1]);
+		ver2[2] += pol * (model->frames[frame2].vertices[index2].vertex[2] - ver2[2]);
+	}
+
+	//draw line
+	glVertex3f(ver1[0], ver1[1], ver1[2]);
+	glVertex3f(ver2[0], ver2[1], ver2[2]);
+
+}
+
+
+void
+mdx_renderGlCommand_inners(mdx_model_t *model, int frame1, int frame2, float pol, int lerp)
+{
+	int i = 0;
+	int runLenType, runTotal;
+	int isStrip;
+	float s, t;
+	int count, index, v1 = 0, v2 = 0, v3 = 0;
+	int maxCmds = model->header.numGlCommands;
+	int maxVert = model->header.numVertices;
+
+
+	runLenType = model->glCommandBuffer[i++]; //get first command
+	while (runLenType != 0)
+	{
+		if (!model->isMD2)
+			i++; //mdx. read object number
+
+		if (runLenType > 2 && runLenType <= maxCmds)
+		{
+			//glColor3f(0.0f, 1.0f, 0.0f); //set green
+			count = runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_STRIP;
+		}
+		else if (runLenType < 2 && -runLenType <= maxCmds)
+		{
+			//glColor3f(1.0f, 0.0f, 0.0f); //set red
+			count = -runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_FAN;
+		}
+		else
+			break; //also catch less than 3 vert errors
+
+		while (count--)
+		{
+			s = *(float *)&model->glCommandBuffer[i++];
+			t = *(float *)&model->glCommandBuffer[i++];
+			index = model->glCommandBuffer[i++]; //vertex index
+
+			//hypov8 invalid model.
+			if (index < 0 || index >= maxVert)
+				return;
+
+			v3 = index;
+			//only draw outter edges
+			if (isStrip == GL_TRIANGLE_STRIP)
+			{
+				//if (count == runTotal) //skip
+				//if (count == (runTotal - 1))
+				//	mdx_renderLine(model, frame1, frame2, v2, v3, pol);
+				//else 
+				if (count < (runTotal - 2))
+					mdx_renderLine(model, frame1, frame2, v1, v2, pol); //inner tri
+
+				//last line
+				//if (count == 0)
+				//	mdx_renderLine(model, frame1, frame2, index, v2, pol);
+
+				//store prev vert
+				v1 = v2;
+				v2 = v3;
+			}
+			else //GL_TRIANGLE_FAN
+			{
+				if (count == runTotal)
+					v1 = v2 = v3;
+				else if (count && count < runTotal)
+				{
+					mdx_renderLine(model, frame1, frame2, v1, v3, pol); //edge of tri
+					v2 = v3;
+				}
+			}
+		}
+		runLenType = model->glCommandBuffer[i++];
+	}
+}
+
+
+void
+mdx_renderGlCommand_edges(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, 
+	float *debug1_rgb, float *debug2_rgb)
+{
+	int i = 0;
+	int runLenType, runTotal;
+	int isStrip;
+	float s, t;
+	int count, index, v1=0, v2=0, v3=0;
+	int maxCmds = model->header.numGlCommands;
+	int maxVert = model->header.numVertices;
+	
+
+	runLenType = model->glCommandBuffer[i++]; //get first command
+	while (runLenType != 0)
+	{
+		if (!model->isMD2)
+			i++; //mdx. read object number
+
+		if (runLenType > 2 && runLenType <= maxCmds)
+		{
+			glColor3f(debug2_rgb[0], debug2_rgb[1], debug2_rgb[2]); //set green
+			count = runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_STRIP;
+		}
+		else if (runLenType < 2 && -runLenType <= maxCmds)
+		{
+			glColor3f(debug1_rgb[0], debug1_rgb[1], debug1_rgb[2]); //set red
+			count = -runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_FAN;
+		}
+		else
+			break; //also catch less than 3 vert errors
+
+		while (count--)
+		{
+			s = *(float *)&model->glCommandBuffer[i++];
+			t = *(float *)&model->glCommandBuffer[i++];
+			index = model->glCommandBuffer[i++]; //vertex index
+
+			//hypov8 invalid model.
+			if (index < 0 || index >= maxVert)
+				return;
+
+			v3 = index;
+			//only draw outter edges
+			if (isStrip == GL_TRIANGLE_STRIP)
+			{
+				//if (count == runTotal) //skip
+				if (count == (runTotal - 1))
+					mdx_renderLine(model, frame1, frame2, v2, v3, pol);
+				else if (count <= (runTotal - 2))
+					mdx_renderLine(model, frame1, frame2, v1, v3, pol); //edge of tri
+
+				//last line
+				if (count == 0)
+					mdx_renderLine(model, frame1, frame2, index, v2, pol);
+
+				//store prev vert
+				v1 = v2;
+				v2 = v3;
+			}
+			else //GL_TRIANGLE_FAN
+			{
+				if (count == runTotal)
+					v1 = v2 = v3;
+				else if (count < runTotal)
+				{
+					mdx_renderLine(model, frame1, frame2, v2, v3, pol); //edge of tri
+					v2 = v3;
+				}
+
+				if (count == 0) //last line
+				{
+					mdx_renderLine(model, frame1, frame2, v1, v3, pol);
+				}
+			}
+		}
+		runLenType = model->glCommandBuffer[i++];
+	}
+}
+
+void
+mdx_renderGlCommand_face(mdx_model_t *model, int frame1, int frame2, float pol, int lerp,
+	float *debug1_rgb, float *debug2_rgb)
+{
+	int i = 0;
+	int runLenType, runTotal;
+	int isStrip;
+	float s, t;
+	int count, index, v1 = 0, v2 = 0, v3 = 0;
+	int maxCmds = model->header.numGlCommands;
+	int maxVert = model->header.numVertices;
+
+
+	runLenType = model->glCommandBuffer[i++]; //get first command
+	while (runLenType != 0)
+	{
+		if (!model->isMD2)
+			i++; //mdx. read object number
+
+		if (runLenType > 2 && runLenType <= maxCmds)
+		{
+			glColor3f(debug2_rgb[0], debug2_rgb[1], debug2_rgb[2]); //set green
+			count = runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_STRIP;
+		}
+		else if (runLenType < 2 && -runLenType <= maxCmds)
+		{
+			glColor3f(debug1_rgb[0], debug1_rgb[1], debug1_rgb[2]); //set red
+			count = -runLenType;
+			runTotal = count - 1; //0based
+			isStrip = GL_TRIANGLE_FAN;
+		}
+		else
+			break; //also catch less than 3 vert errors
+
+		while (count--)
+		{
+			s = *(float *)&model->glCommandBuffer[i++];
+			t = *(float *)&model->glCommandBuffer[i++];
+			index = model->glCommandBuffer[i++]; //vertex index
+
+															 //hypov8 invalid model.
+			if (index < 0 || index >= maxVert)
+				return;
+
+			v3 = index;
+			//only draw outter edges
+			if (isStrip == GL_TRIANGLE_STRIP)
+			{
+				if (count <= (runTotal - 2))
+					mdx_renderTriMidDot(model, frame1, frame2, v1, v2, v3, pol); //mid point
+
+				//store prev vert
+				v1 = v2;
+				v2 = v3;
+			}
+			else //GL_TRIANGLE_FAN
+			{
+				if (count == runTotal)
+					v1 = v2 = v3; //start/piviot
+				else if (count <= (runTotal -2))
+				{
+					mdx_renderTriMidDot(model, frame1, frame2, v1, v2, v3, pol); //mid point
+				}
+				v2 = v3;
+			}
+		}
+		runLenType = model->glCommandBuffer[i++];
+	}
+}
+
+void
+mdx_renderGlCommande(mdx_model_t *model, int frame1, int frame2, float pol, int lerp)
+{
+	int i = 0;
+	int val = model->glCommandBuffer[i++];
+	float x1, y1, z1;
+	float x2, y2, z2;
+	float s, t;
+	int count, index;
 
 	while (val != 0)
 	{
 		if (!model->isMD2)
-			something = model->glCommandBuffer[i++]; //mdx. read object number
-		
+			i++; //mdx. read object number
+
 		if (val > 0 && val <= model->header.numGlCommands) //hypov8 add check
 		{
 			glBegin(GL_TRIANGLE_STRIP);
@@ -546,14 +828,14 @@ mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp
 			glBegin(GL_TRIANGLE_FAN);
 			count = -val;
 		}
-		else 
+		else
 			break;
 
 		while (count--)
 		{
-			float s = *(float *) &model->glCommandBuffer[i++];
-			float t = *(float *) &model->glCommandBuffer[i++];
-			int index = model->glCommandBuffer[i++];
+			s = *(float *)&model->glCommandBuffer[i++];
+			t = *(float *)&model->glCommandBuffer[i++];
+			index = model->glCommandBuffer[i++]; //vertex index
 
 			//hypov8 invalid model
 			if (index < 0 || index > model->header.numVertices)
@@ -572,7 +854,7 @@ mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp
 			z2 = model->frames[frame1].vertices[index].vertex[2];
 
 			//interpolate
-			if (lerp)	
+			if (lerp)
 			{	//normal dir
 				x1 += pol * (model->frames[frame2].vertices[index].normal[0] - x1);
 				y1 += pol * (model->frames[frame2].vertices[index].normal[1] - y1);
@@ -583,15 +865,32 @@ mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp
 				z2 += pol * (model->frames[frame2].vertices[index].vertex[2] - z2);
 			}
 
-			glTexCoord2f (s, t);
+			glTexCoord2f(s, t);
 			glNormal3f(x1, y1, z1);
 			glVertex3f(x2, y2, z2);
 		}
 
-		glEnd ();
+		glEnd();
 		val = model->glCommandBuffer[i++];
 	}
+}
 
+/*
+ * draw with glcommands
+ *
+ */
+void
+mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int isMissingFrame)
+{
+	int i = 0;
+	int val = model->glCommandBuffer[i++];
+	float rgba[4];
+
+	glGetFloatv(GL_CURRENT_COLOR, rgba);
+	if (isMissingFrame && frame2 > model->header.numFrames)
+		glColor3f(1.0f, 0.0f, 0.0f); //set red
+
+	mdx_renderGlCommande(model, frame1, frame2, pol, lerp);
 
 	if (isMissingFrame)
 		glColor3f(rgba[0], rgba[1], rgba[2]); //reset to white
@@ -599,45 +898,88 @@ mdx_drawModel_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp
 
 
 //HYPOVERTEX
-void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, int lerp, int vertID, int useFace, int showVN, int showGrid, int showHitBox, 
-	float *rgb, float *grid_rgb)
+static void mdx_drawModel_dev_gl(mdx_model_t *model, int frame1, int frame2, float pol, int lerp,
+	int vertID, int useFace, int showVN, int showGrid, int showHitBox, int wireFrame, int wireGL1, int wireGL2,
+	float *debug1_rgb, float *debug2_rgb, float *grid_rgb, float *wire_rgb)
 {
 	float x1, y1, z1;
 	float x2, y2, z2;
 	float nx, ny, nz;
-	int i, j, reset = 0;
-	GLboolean isLight[1], isLight0[1], isTex[1];
-	float rgba[4];
+	int i, j;
+
 
 	//skip
-	if (vertID == -1 && !showVN && !showGrid && !showHitBox)
+	if (vertID == -1 && !showVN && !showGrid && !showHitBox && !wireFrame && !wireGL1 && !wireGL2)
 		return;
-	
-	// get previous values	
-	glGetBooleanv(GL_LIGHTING, isLight);
-	glGetBooleanv(GL_LIGHT0, isLight0);
-	glGetBooleanv(GL_TEXTURE_2D, isTex);
-	glGetFloatv(GL_CURRENT_COLOR, rgba);
 
 	glDisable(GL_LIGHTING);
 	glDisable(GL_LIGHT0);
 	glDisable(GL_TEXTURE_2D);
 	glPointSize(5);
 
-	glColor3f(rgb[0], rgb[1], rgb[2]); //set red
+
+	//textured/wire
+	if (wireFrame)
+	{
+		glDepthRange(0.00f, 0.99999f);
+		glPolygonOffset(10.0f, 10.0f);
+		glColor3f(wire_rgb[0], wire_rgb[1], wire_rgb[2]); //set white
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glEnable(GL_CULL_FACE); //remove back faces on wireframe
+		glCullFace(GL_FRONT); //reverse windindings=back?
+		glEnable(GL_DEPTH_TEST);
+
+		mdx_renderGlCommande(model, frame1, frame2, pol, lerp);
+
+		glPolygonOffset(0.0f, 0.0f);
+		glDepthRange(0.00001f, 1.0f);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	}
+
+	//render gl command edges
+	if (wireGL1 || wireGL2 )
+	{
+		glBegin(GL_POINTS);
+		mdx_renderGlCommand_face(model, frame1, frame2, pol, lerp, debug1_rgb, debug2_rgb);
+		glEnd();
+
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glDisable(GL_POLYGON_MODE)
+		glDepthRange(0.00f, 0.99999f);
+		//outter edges (open edge). note: can overlap between strip/fan and render wrong color
+		glLineWidth(1.25f);
+		glBegin(GL_LINES);
+		mdx_renderGlCommand_edges(model, frame1, frame2, pol, lerp, debug1_rgb, debug2_rgb);
+		glEnd();
+
+		if (wireGL1)
+		{
+			//inner edge (shared triangle)
+			//glLineWidth(1.5f);
+			glBegin(GL_LINES);
+			glColor3f(wire_rgb[0], wire_rgb[1], wire_rgb[2]); //set red
+			mdx_renderGlCommand_inners(model, frame1, frame2, pol, lerp);
+			glEnd();
+		}
+
+		glLineWidth(1.0f);
+		glDepthRange(0.00001f, 1.0f);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	}
+
+
+	glColor3f(debug1_rgb[0], debug1_rgb[1], debug1_rgb[2]); //set red
 	if (vertID > -1 && 
 		((!useFace && vertID < model->header.numVertices) || ( useFace && vertID < model->header.numTriangles)) )
 	{
-		reset = 1;
 		glBegin(GL_POINTS);
-
 
 		if (!useFace)
 		{
 			//use vertex pos
-			x1 = model->frames[frame].vertices[vertID].vertex[0];
-			y1 = model->frames[frame].vertices[vertID].vertex[1];
-			z1 = model->frames[frame].vertices[vertID].vertex[2];
+			x1 = model->frames[frame1].vertices[vertID].vertex[0];
+			y1 = model->frames[frame1].vertices[vertID].vertex[1];
+			z1 = model->frames[frame1].vertices[vertID].vertex[2];
 			
 			if (lerp && frame2 > -1)
 			{	//interpolate
@@ -652,9 +994,9 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 			int id0 = model->triangles[vertID].vertexIndices[0];
 			int id1 = model->triangles[vertID].vertexIndices[1];
 			int id2 = model->triangles[vertID].vertexIndices[2];
-			float *v1 = model->frames[frame].vertices[id0].vertex;
-			float *v2 = model->frames[frame].vertices[id1].vertex;
-			float *v3 = model->frames[frame].vertices[id2].vertex;
+			float *v1 = model->frames[frame1].vertices[id0].vertex;
+			float *v2 = model->frames[frame1].vertices[id1].vertex;
+			float *v3 = model->frames[frame1].vertices[id2].vertex;
 
 			x1 = (v1[0]+v2[0]+v3[0]) / 3.0f;
 			y1 = (v1[1]+v2[1]+v3[1]) / 3.0f;
@@ -678,10 +1020,9 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 		glEnd();
 	}
 
-	//hypov8 vertexnorms
+	//hypov8 vertex normals
 	if (showVN)
-	{
-		reset = 1;	
+	{	
 		glBegin(GL_LINES);
 		//glColor3f(1.0f, 0.2f, 0.2f); //set red
 		for (i = 0; i < model->header.numVertices; i++)
@@ -689,13 +1030,13 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 			for (j = 0; j < 3; j++)
 			{
 				//start poing of normal(vertex)
-				x1 = model->frames[frame].vertices[i].vertex[0];
-				y1 = model->frames[frame].vertices[i].vertex[1];
-				z1 = model->frames[frame].vertices[i].vertex[2];
+				x1 = model->frames[frame1].vertices[i].vertex[0];
+				y1 = model->frames[frame1].vertices[i].vertex[1];
+				z1 = model->frames[frame1].vertices[i].vertex[2];
 				//normal direction
-				nx = model->frames[frame].vertices[i].normal[0];
-				ny = model->frames[frame].vertices[i].normal[1];
-				nz = model->frames[frame].vertices[i].normal[2];
+				nx = model->frames[frame1].vertices[i].normal[0];
+				ny = model->frames[frame1].vertices[i].normal[1];
+				nz = model->frames[frame1].vertices[i].normal[2];
 
 				if (lerp && frame2 > -1)
 				{	//interpolate
@@ -726,8 +1067,8 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 		int i, j;
 		int iObj = model->header.numSubObjects;
 		int fSize = model->header.numFrames * 6;
-		int fOfs1 = frame * 6; //frame1
-		int fOfs2= frame2 * 6; //frame2
+		int fOfs1 = frame1 * 6; //frame1
+		int fOfs2 = frame2 * 6; //frame2
 		float *bbox, minMax[6];
 		static int cube[6][12] = {
 			//vert 1		vert2			vert 3			vert 4
@@ -739,10 +1080,8 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 			{ 3, 4, 5,		3, 1, 5,		0, 1, 5,		0, 4, 5 }, //face 6
 		};
 
-		glColor4f(rgb[0], rgb[1], rgb[2], 0.3f); //set red
-		//glEnable(GL_BLEND); //Enable blending.
-		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		//glBegin(GL_QUADS);
+		glColor4f(debug1_rgb[0], debug1_rgb[1], debug1_rgb[2], 0.3f); //set red
+
 		for (i = 0; i < iObj; i++)
 		{
 			bbox = &model->hitBox[fSize * i + fOfs1];
@@ -805,37 +1144,36 @@ void mdx_drawModel_dev_gl(mdx_model_t *model, int frame, int frame2, float pol, 
 		}
 		glEnd();
 	}
-
-	//reset values to previous
-	if (isLight[0] != 0)
-		glEnable(GL_LIGHTING);
-	if (isLight0[0] != 0)
-		glEnable(GL_LIGHT0);
-	if (isTex[0] != 0)
-		glEnable(GL_TEXTURE_2D);
-	glColor3f(rgba[0], rgba[1], rgba[2]); //reset to white
 }
 //END_HYPOVERTEX
 
 /*
  * draw model
  */
-void mdx_drawModel (mdx_model_t *model, int frame1, int frame2, float pol, int noLerp, int noData)
+void mdx_drawModel (mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int noData)
 {
-	if (g_interp && !noLerp && frame1 != frame2)
+	if (lerp && frame1 != frame2)
 		mdx_drawModel_gl(model, frame1, frame2, pol, 1, 0);
 	else
 		mdx_drawModel_gl(model, frame1, frame2, pol, 0, noData);
 }
 
 //HYPOVERTEX
-void mdx_drawModel_dev (mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int vertID, int useFace, int showVN, int showGrid, int showHitBox, 
-	float *rgb, float *grid_rgb)
+void mdx_drawModel_dev (mdx_model_t *model, int frame1, int frame2, float pol, int lerp, 
+	int vertID, int useFace, 
+	int showVN, int showGrid, int showHitBox, int wireFrame, int wireGL1, int wireGL2,
+	float *debug1_rgb, float *debug2_rgb, float *grid_rgb, float *wire_rgb)
 {
-	if (g_interp && lerp)
-		mdx_drawModel_dev_gl(model, frame1, frame2, pol, 1, vertID, useFace, showVN, showGrid, showHitBox, rgb, grid_rgb);
+	if (lerp)
+		mdx_drawModel_dev_gl(model, frame1, frame2, pol, 1, 
+			vertID, useFace, 
+			showVN, showGrid, showHitBox, wireFrame, wireGL1, wireGL2,
+			debug1_rgb, debug2_rgb, grid_rgb, wire_rgb);
 	else
-		mdx_drawModel_dev_gl(model, frame1,     -1,  -1, 0, vertID, useFace, showVN, showGrid, showHitBox, rgb, grid_rgb);
+		mdx_drawModel_dev_gl(model, frame1,     -1,  -1, 0, 
+			vertID, useFace, 
+			showVN, showGrid, showHitBox, wireFrame, wireGL1, wireGL2,
+			debug1_rgb, debug2_rgb, grid_rgb, wire_rgb);
 }
 //END
 
@@ -918,196 +1256,149 @@ mdx_generateLightNormals (mdx_model_t *model)
 	}
 }
 
+void 
+getFrameNameCleaned(char *inName, char outName[], int charLen)
+{
+	int i;
+	int len = strlen(inName);
 
+	if (len > 16)
+		len = 16;
+
+	strncpy_s(outName, charLen, inName, len);
+
+	for (i = len - 1; i >= 0; i--)
+	{
+		if (outName[i] >= '0' && outName[i] <= '9')
+			outName[i] = '\0'; //clean sequence number
+		else
+			return;
+	}
+}
+
+static int 
+frameNamesMatch(char *fr1_name, char *fr2_name)
+{
+	char c1, c2;
+	int endNum = 1;
+	int len1 = strlen(fr1_name), len2 = strlen(fr2_name);
+	int len = (len1 < len2)? len1: len2; //shortest length str
+
+	if (len > 16)
+		len = 16;
+
+	for (int j = len-1; j >=0; j--)
+	{
+
+		c1 = fr1_name[j];
+		c2 = fr2_name[j];
+
+		//fix frame names with numbers
+		if (endNum)
+		{
+			if (!(c1 >= '0' && c1 <= '9' && c2 >= '0' && c2 <= '9'))
+				endNum = 0;
+		}
+
+		if (!endNum)
+		{
+			if (c1 != c2)
+				return 0;// differnt frame name
+		}
+	} 
+
+	return 1; //prefix string, full match.
+}
 
 int
-mdx_getAnimationCount (mdx_model_t *model)
+mdx_getAnimationCount(mdx_model_t *model)
 {
-	int i, j, pos;
-	int count;
-	int lastId;
-	char name[32], last[32];
+	int seq_count;
+	int frame_start, frame_end;
 
-	//strcpy_s (last, sizeof(model->frames[0].name), model->frames[0].name);
-	memcpy(last, model->frames[0].name, sizeof(model->frames[0].name));
-	pos = strlen (last) - 1;
-	j = 0;
-	while (last[pos] >= '0' && last[pos] <= '9' && j < 2)
+	frame_start = 0;
+	frame_end = 1;
+	seq_count = 1;
+	for (; frame_end < model->header.numFrames; frame_end++)
 	{
-		pos--;
-		j++;
+		if (frameNamesMatch(model->frames[frame_start].name, model->frames[frame_end].name))
+			continue;
+		seq_count++;
+		frame_start = frame_end;
 	}
-	last[pos + 1] = '\0';
-
-	lastId = 0;
-	count = 0;
-
-	for (i = 0; i <= model->header.numFrames; i++)
-	{
-		if (i == model->header.numFrames)
-			name[0] = '\0'; // some kind of a sentinel
-		else
-		{
-			//strcpy_s (name, sizeof(model->frames[i].name), model->frames[i].name);
-			memcpy(name, model->frames[i].name, sizeof(model->frames[i].name));
-			name[16] = '\0'; //str not allways null terminated
-		}
-		pos = strlen (name) - 1;
-		j = 0;
-		while (name[pos] >= '0' && name[pos] <= '9' && j < 2)
-		{
-			pos--;
-			j++;
-		}
-		name[pos + 1] = '\0';
-
-		if (strcmp (last, name))
-		{
-			strcpy_s (last, sizeof(last), name);
-			count++;
-		}
-	}
-
-	return count;
+	
+	return seq_count;
 }
-
-
 
 const char *
-mdx_getAnimationName (mdx_model_t *model, int animation)
+mdx_getAnimationName(mdx_model_t *model, int *anim_index)
 {
-	int i, j, pos;
-	int count, prev;
-	int lastId;
-	static char last[32];
-	char name[32];
+	//int seq_idx; //sequence index
+	int frame_start, frame_end;
+	static char ret_name[32];
 
-	//strcpy_s (last, sizeof(model->frames[0].name), model->frames[0].name);
-	memcpy(last, model->frames[0].name, sizeof(model->frames[0].name));
-	pos = strlen (last) - 1;
-	j = 0;
-	while (last[pos] >= '0' && last[pos] <= '9' && j < 2)
+	frame_start = *anim_index;
+	frame_end = frame_start +1;
+	//seq_idx = 0;
+	for (; frame_end < model->header.numFrames; frame_end++)
 	{
-		pos--;
-		j++;
-	}
-	last[pos + 1] = '\0';
+		if (frameNamesMatch(model->frames[frame_start].name, model->frames[frame_end].name))
+			continue;
 
-	lastId = 0;
-	count = 0;
-	prev = 0;
-
-	for (i = 0; i <= model->header.numFrames; i++)
-	{
-		if (i == model->header.numFrames)
-			name[0] = '\0';// some kind of a sentinel
-		else
+		//if (seq_idx == *anim_index)
 		{
-			//strcpy_s (name, sizeof(model->frames[i].name), model->frames[i].name);
-			memcpy(name, model->frames[i].name, sizeof(model->frames[i].name));
-			name[16] = '\0'; //str not allways null terminated
+			//found matching index
+			getFrameNameCleaned(model->frames[frame_start].name, ret_name, 32);
+			sprintf_s(ret_name, sizeof(ret_name), "%s  (%i-%i)", ret_name, frame_start, frame_end-1); //hypov8 add
+			*anim_index = frame_end-1;
+			return ret_name;
 		}
-		pos = strlen (name) - 1;
-		j = 0;
-		while (name[pos] >= '0' && name[pos] <= '9' && j < 2)
-		{
-			pos--;
-			j++;
-		}
-		name[pos + 1] = '\0';
-
-		//if (animation == count - 1)
-		//{
-		//	if (prev == -1)
-		//		prev = i;
-		//	else
-		//		prev += 1;
-		//}
-
-		if (strcmp (last, name))
-		{
-			if (count == animation)
-			{
-				sprintf_s(last, sizeof(last), "%s  (%i-%i)", last, prev, i - 1); //hypov8 add
-				return last;
-			}
-
-			strcpy_s (last, sizeof(last), name);
-			count++;
-			prev = i;
-		}
+		//seq_idx++;
+		//frame_start = frame_end;
 	}
 
-	return 0;
+	//1-frame or end of sequence
+	getFrameNameCleaned(model->frames[0].name, ret_name, 32);
+	sprintf_s(ret_name, sizeof(ret_name), "%s  (%i-%i)", ret_name, frame_start, frame_end-1); //hypov8 add
+	*anim_index = frame_end-1;
+	return ret_name;
 }
-
 
 
 void
-mdx_getAnimationFrames (mdx_model_t *model, int animation, int *startFrame, int *endFrame)
+mdx_getAnimationFrames(mdx_model_t *model, int anim_index, int *startFrame, int *endFrame)
 {
-	int i, j, pos;
-	int count, numFrames, frameCount;
-	int lastId;
-	char name[32], last[32];
+	int seq_idx; //sequence index
+	int frame_start, frame_end;
 
-	//strcpy_s (last, sizeof(model->frames[0].name), model->frames[0].name);
-	memcpy(last, model->frames[0].name, sizeof(model->frames[0].name));
-	last[16] = '\0'; //str not allways null terminated
-
-	pos = strlen (last) - 1;
-	j = 0;
-	while (last[pos] >= '0' && last[pos] <= '9' && j < 2)
+	frame_start = 0;
+	frame_end = 1;
+	seq_idx = 0;
+	for (; frame_end < model->header.numFrames; frame_end++)
 	{
-		pos--;
-		j++;
-	}
-	last[pos + 1] = '\0';
+		if (frameNamesMatch(model->frames[frame_start].name, model->frames[frame_end].name))
+			continue;
 
-	lastId = 0;
-	count = 0;
-	numFrames = 0;
-	frameCount = 0;
-
-	for (i = 0; i <= model->header.numFrames; i++)
-	{
-		if (i == model->header.numFrames)
-			name[0] = '\0'; // some kind of a sentinel
-		else
+		if (seq_idx == anim_index)
 		{
-			//strcpy_s (name, sizeof(model->frames[i].name), model->frames[i].name);
-			memcpy(name, model->frames[i].name, sizeof(model->frames[i].name));
-			name[16] = '\0'; //str not allways null terminated
+			//found matching index
+			*startFrame = frame_start;
+			*endFrame = frame_end-1;
+			return;
 		}
-		pos = strlen (name) - 1;
-		j = 0;
-		while (name[pos] >= '0' && name[pos] <= '9' && j < 2)
-		{
-			pos--;
-			j++;
-		}
-		name[pos + 1] = '\0';
-
-		if (strcmp (last, name))
-		{
-			strcpy_s (last, sizeof(last), name);
-
-			if (count == animation)
-			{
-				*startFrame = frameCount - numFrames;
-				*endFrame = frameCount - 1;
-				return;
-			}
-
-			count++;
-			numFrames = 0;
-		}
-		frameCount++;
-		numFrames++;
+		seq_idx++;
+		frame_start = frame_end;
 	}
 
+	//reached end of list. last id match
+	if (seq_idx == anim_index &&  model->header.numFrames == frame_end)
+	{
+		*startFrame = frame_start;
+		*endFrame = frame_end-1;
+		return;
+	}
 
-	*startFrame = *endFrame = 0;
+	//error...
+	*startFrame = 0;
+	*endFrame = model->header.numFrames -1;
 }
-
-

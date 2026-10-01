@@ -5,30 +5,26 @@
 #include <mx/mxGlWindow.h>
 #endif
 
-//#ifndef INCLUDED_MDXVIEWER
+#ifndef INCLUDED_MDXVIEWER
 #include "mdxviewer.h"
-//#endif
-
-//#ifndef INCLUDED_MDX
-//#include "common.h"
-#include "mdx.h"
-#include "md2.h"
-//#endif
-
+#endif
 
 
 enum // GlWindow Flags
 {
-	F_WATER = 1,
-	F_LIGHT = 2,
-	F_SHININESS = 4,
-	F_INTERPOLATE = 8,
-	F_GLCOMMANDS = 16,
-	F_PAUSE = 32,
-	F_BACKGROUND = 64,
-	F_VNORMS = 128,
-	F_GRID = 256,
-	F_HITBOX = 512
+	F_WATER =       SET_BIT(0),
+	F_LIGHT =       SET_BIT(1),
+	F_SHININESS =   SET_BIT(2),
+	F_INTERPOLATE = SET_BIT(3),
+	F_PAUSE =       SET_BIT(4),
+	F_BACKGROUND =  SET_BIT(5),
+	F_VNORMS =      SET_BIT(6),
+	F_GRID =        SET_BIT(7),
+	F_HITBOX =      SET_BIT(8),
+	F_WIREFRAME =   SET_BIT(9),
+	F_WIRE_OGL1 =   SET_BIT(10),
+	F_WIRE_OGL2 =   SET_BIT(11),
+	//F_GLCOMMANDS =  SET_BIT(10),
 };
 
 
@@ -64,7 +60,7 @@ enum // render modes
 	RM_WIREFRAME,
 	RM_FLATSHADED,
 	RM_SMOOTHSHADED,
-	RM_TEXTURED
+	RM_TEXTURED,
 };
 
 
@@ -73,40 +69,53 @@ class GlWindow : public mxGlWindow
 {
 	float d_rotX, d_rotY;
 	float d_transX, d_transY, d_transZ;
-	mdx_model_t *d_models[MAX_MODELS]; //6 models max
 	float d_modelOriginX, d_modelOriginZ; //rotate screen around model
 
-	//1->6 = model, 7 = background, 8 = water 
-	unsigned int d_textureNames[MAX_TEXTURES];	// index0 = texture 0
-	int d_textureLimit;		
+	mdx_model_t *d_models[MAX_MODELS]; //6 models max
 
-	char modelFileNames[MAX_MODELS][256]; //hypov8 models
-	char modelTexNames[MAX_TEXTURES][256]; //hypov8 textures
+	//1-6=model, 7=background, 8=water 
+	bool  d_textureValid[MAX_TEXTURES]; // valid texture loaded?
+	UINT  d_textureGLID[MAX_TEXTURES];  // opengl texture ID //GLuint
+	int   d_textureRez[MAX_TEXTURES][2]; // w/h
+	//int          d_textureLimit;
 
-	int d_renderMode;
+	char  d_modelFileNames[MAX_MODELS][MAX_PATH_LEN]; //hypov8 models
+	char  d_modelTexNames[MAX_TEXTURES][MAX_PATH_LEN]; //hypov8 textures
 
+	int   d_renderMode;
+	bool  d_resumePaused;
 	float d_pol; // interpolate value 0.0f - 1.0f
-	int d_currFrame, d_currFrame2, d_startFrame, d_endFrame;
+	int   d_currFrame, d_currFrame2, d_startFrame, d_endFrame;
 	float d_pitch;
 
-	float d_bgColor[3];
-	float d_fgColor[3];
-	float d_wfColor[3];
-	float d_lightColor[3];
-	float d_debugColor[3]; //debug color
-	float d_gridColor[3]; //grid color
-	int d_debugLoad; //load invalid models
-	//int d_startMode; //startup switch
-	bool d_startPaused; //startup switch
+	float d_bgColor[3];    //background  color
+	float d_faceColor[3];  //face color (no textures)
+	float d_wfColor[3];    //wireframe color
+	float d_lightColor[3]; //pointlight color
+	float d_debugColor1[3]; //debug color
+	float d_debugColor2[3]; //debug color
+	float d_gridColor[3];  //grid color
 
+	int  d_debugLoad;     //load invalid models
+	//int d_startMode; //startup switch
+	//bool  d_startPaused; //startup switch
 
 	float d_bias;
 
-	int d_flags;
+	int   d_flags;
 
 	int d_modelIndex; //hypov8
 	int d_vertexIndex; //HYPOVERTEX
 	int d_vertexUseFace; //HYPOVERTEX
+
+private:
+	void pixelTransfer_set(float value);
+	void pixelTransfer_reset();
+	void bindWhiteImage(int imgIndex);
+	int  gl_uploadTexture24(byte *data, int width, int height, int gl_ID);
+	void ResampleTexture(byte *in, int inwidth, int inheight, byte *out, int outwidth, int outheight);
+	int  clamp(float value);
+
 
 public:
 	friend MDXViewer;
@@ -119,51 +128,48 @@ public:
 	virtual int handleEvent (mxEvent *event);
 	virtual void draw ();
 
-	mdx_model_t *loadModel (const char *filename, int pos);
-	int loadTexture (const char *filename, int pos);
+	mdx_model_t *loadModel (const char *filename, int pos, bool getSkin);
+	void reloadAllTextures(); //hypov8. f5 refresh textures
+	int  loadTexture (const char *filename, int pos);
 
 	void setRenderMode (int mode);
 	void setFrameInfo (int startFrame, int endFrame);
 	void setPitch (float pitch);
 	void setBGColor (float r, float g, float b);
-	void setFGColor (float r, float g, float b);
+	void setFaceColor(float r, float g, float b);
 	void setWFColor (float r, float g, float b);
 	void setLightColor (float r, float g, float b);
-	void setDebugColor (float r, float g, float b); //hypov8
+	void setDebugColor1 (float r, float g, float b); //hypov8
+	void setDebugColor2 (float r, float g, float b); //hypov8
 	void setGridColor (float r, float g, float b); //hypov8
 	void setFlag (int flag, bool enable);
 	void setBrightness (int value);
-	void setTextureLimit (int limit) { d_textureLimit = limit; }
-	void setModelIndex(void);//hypov8
+	//void setTextureLimit (int limit) { d_textureLimit = limit; }
+	int  getFreeModelIndex();
 
 	void setLoadInvalid(int value)  { d_debugLoad = value; }; //hypov8
+	void setResumePaused() { d_resumePaused = true; };
 
 	// ACCESSORS
 	mdx_model_t *getModel (int pos) const { return d_models[pos]; }
-	int getRenderMode () const { return d_renderMode; }
-	int getCurrFrame () const { return d_currFrame; }
-	int getCurrFrame2 () const { return d_currFrame2; }
-	int getStartFrame () const { return d_startFrame; }
-	int getEndFrame () const { return d_endFrame; }
+	int  getRenderMode () const { return d_renderMode; }
+	int  getCurrFrame () const { return d_currFrame; }
+	int  getCurrFrame2 () const { return d_currFrame2; }
+	int  getStartFrame () const { return d_startFrame; }
+	int  getEndFrame () const { return d_endFrame; }
 	void getBGColor (float *r, float *g, float *b) { *r = d_bgColor[0]; *g = d_bgColor[1]; *b = d_bgColor[2]; }
-	void getFGColor (float *r, float *g, float *b) { *r = d_fgColor[0]; *g = d_fgColor[1]; *b = d_fgColor[2]; }
+	void getFaceColor (float *r, float *g, float *b) { *r = d_faceColor[0]; *g = d_faceColor[1]; *b = d_faceColor[2]; }
 	void getWFColor (float *r, float *g, float *b) { *r = d_wfColor[0]; *g = d_wfColor[1]; *b = d_wfColor[2]; }
 	void getLightColor (float *r, float *g, float *b) { *r = d_lightColor[0]; *g = d_lightColor[1]; *b = d_lightColor[2]; }
-	void getDebugColor (float *r, float *g, float *b) { *r = d_debugColor[0]; *g = d_debugColor[1]; *b = d_debugColor[2]; } //hypov8
+	void getDebugColor1 (float *r, float *g, float *b) { *r = d_debugColor1[0]; *g = d_debugColor1[1]; *b = d_debugColor1[2]; } //hypov8
+	void getDebugColor2 (float *r, float *g, float *b) { *r = d_debugColor2[0]; *g = d_debugColor2[1]; *b = d_debugColor2[2]; } //hypov8
 	void getGridColor  (float *r, float *g, float *b) { *r = d_gridColor[0];  *g = d_gridColor[1];  *b = d_gridColor[2]; } //hypov8
 	bool getFlag (int flag) const { return ((d_flags & flag) == flag); }
-	int getFlags () const { return d_flags; }
-	int getTextureLimit () const { return d_textureLimit; }
-	int getModelIndex() const { return d_modelIndex; }//hypov8
+	int  getFlags () const { return d_flags; }
+	//int  getTextureLimit () const { return d_textureLimit; }
+	int  getLoadInvalid() { return d_debugLoad; }; //hypov8
 
 };
-
-
-
-//extern char modelFileNames[MAX_MODELS][256]; //hypov8 models
-//extern char modelTexNames[MAX_TEXTURES][256]; //hypov8 textures
-
-
 
 
 #endif // INCLUDED_GLWINDOW

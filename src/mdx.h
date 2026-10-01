@@ -70,7 +70,7 @@ typedef struct
 {
 	float s;
 	float t;
-   int vertexIndex;
+	int vertexIndex;
 } mdx_glCommandVertex_t; //md2 compat
 
 typedef struct
@@ -92,15 +92,14 @@ extern "C" {
 #endif
 
 mdx_model_t *mdx_readModel (const char *filename, int debugLoad);
+void mdx_read_playerINI(const char *path, char *path_head, char *path_body, char *path_legs);
 void mdx_freeModel (mdx_model_t *model);
-void mdx_setStyle (int glcmds, int interp);
 void mdx_getBoundingBox (mdx_model_t *model, float *outMin, float *outMax, int frame);
 void mdx_getBoundingBoxExport (mdx_model_t *model, float *minmax, int frame);
 void mdx_drawModel (mdx_model_t *model, int frame1, int frame2, float pol, int noLerp, int isMissingFrame);
-//void mdx_drawModel_gl (mdx_model_t *model, int frame1, int isMissingFrame); //hypov8 add: render models without animations
 void mdx_generateLightNormals (mdx_model_t *model);
 int mdx_getAnimationCount (mdx_model_t *model);
-const char *mdx_getAnimationName (mdx_model_t *model, int animation);
+const char *mdx_getAnimationName (mdx_model_t *model, int *animation);
 void mdx_getAnimationFrames (mdx_model_t *model, int animation, int *startFrame, int *endFrame);
 
 //md2 compatable
@@ -108,7 +107,9 @@ void mdx_makeFacetNormal(mdx_frame_t *frame, mdx_triangle_t *t, int fIdx, float 
 void mdx_normalize(float *n);
 
 //HYPOVERTEX
-void mdx_drawModel_dev(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int vertID, int useFace, int showVN, int showGrid, int showBBox, float *rgb, float *grid_rgb);
+void mdx_drawModel_dev(mdx_model_t *model, int frame1, int frame2, float pol, int lerp, int vertID, int useFace, 
+	int showVN, int showGrid, int showBBox, int wireFrame, int wireGL1, int wireGL2,
+	float *debug1_rgb, float *debug2_rgb, float *grid_rgb, float *wire_rgb);
 int mdx_readFrameData(FILE *file, mdx_frame_t **frames, byte *buffer, int numFrames, int numVertices, int frameSize, float*min, float*max, int offsetFrames, byte **framesBuffer
 	,boolean isModel_HD); //HD
 //END

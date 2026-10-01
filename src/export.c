@@ -8,11 +8,11 @@
 #include <math.h> /* sqrt */
 #include <mx/gl.h>
 #include "common.h"
-//#include "mdx.h"
-//#include "md2.h"
+#include "mdx.h"
+#include "md2.h"
 
 
-float avertexnormals[NUMVERTEXNORMALS][3] = {
+const float avertexnormals[NUMVERTEXNORMALS][3] = {
 	{ -0.525731f, 0.000000f, 0.850651f },
 	{ -0.442863f, 0.238856f, 0.864188f },
 	{ -0.295242f, 0.000000f, 0.955423f },
@@ -177,19 +177,19 @@ float avertexnormals[NUMVERTEXNORMALS][3] = {
 	{ -0.688191f, -0.587785f, -0.425325f },
 };
 
-
+#if 1
 //glcmds related
-//int	commands[65536];
-//int numcommands, numglverts;
-//int	used[MDL_MAX_TRIANGLES];
-//int	strip_xyz[128];
-//int	strip_st[128];
-//int	strip_tris[128];
-//int	stripcount;
-//int FanLength(int starttri, int startv, md2_model_t *md2);
-//int StripLength(int starttri, int startv, md2_model_t *md2);
-//void BuildGlCmds(md2_model_t *md2);
-
+int	commands[65536];
+int numcommands, numglverts;
+int	used[MDL_MAX_TRIANGLES];
+int	strip_xyz[128];
+int	strip_st[128];
+int	strip_tris[128];
+int	stripcount;
+int FanLength(int starttri, int startv, md2_model_t *md2);
+int StripLength(int starttri, int startv, md2_model_t *md2);
+void BuildGlCmds(md2_model_t *md2);
+#endif
 //
 
 
@@ -236,19 +236,18 @@ int SaveAsMD2(const char *filename, mdx_model_t *mdx)
 
 	//Header data
 	memset(md2, 0, sizeof(md2_model_t));
-	md2->header.frameSize = mdx->header.frameSize;
-	md2->header.magic = (int)(('2' << 24) + ('P' << 16) + ('D' << 8) + 'I');
-	md2->header.numFrames = mdx->header.numFrames;
-	md2->header.numGlCommands = mdx->header.numGlCommands;
-	md2->header.numSkins = mdx->header.numSkins;
-	md2->header.numTriangles = mdx->header.numTriangles;
-	md2->header.numVertices = mdx->header.numVertices;
-	md2->header.skinHeight = mdx->header.skinHeight;
-	md2->header.skinWidth = mdx->header.skinWidth;
+	md2->header.magic = (int)('I'+ ('D' << 8) + ('P' << 16) + ('2' << 24));
 	md2->header.version = 8;
-
-	//extra = 0;
-
+	md2->header.skinWidth = mdx->header.skinWidth;
+	md2->header.skinHeight = mdx->header.skinHeight;
+	md2->header.frameSize = mdx->header.frameSize;
+	md2->header.numSkins = mdx->header.numSkins;
+	md2->header.numVertices = mdx->header.numVertices;
+	//numTexCoords; 
+	md2->header.numTriangles = mdx->header.numTriangles;
+	md2->header.numGlCommands = mdx->header.numGlCommands;
+	md2->header.numFrames = mdx->header.numFrames;
+	//offsets
 
 	//Allocate memory for GLCommands
 	md2->glCommandBuffer = (int *)malloc(sizeof(int) * md2->header.numGlCommands);
@@ -556,7 +555,7 @@ int SaveAsMDX(const char *filename, mdx_model_t *active_model)
 	mdx_export->header.numSkins = active_model->header.numSkins;
 	mdx_export->header.numVertices = active_model->header.numVertices;
 	mdx_export->header.numTriangles = active_model->header.numTriangles;
-	mdx_export->header.numGlCommands = active_model->header.numGlCommands; //todo: this is wrong
+	mdx_export->header.numGlCommands = active_model->header.numGlCommands; //updated below
 	mdx_export->header.numFrames = active_model->header.numFrames;
 	mdx_export->header.numSfxDefines =  0; //
 	mdx_export->header.numSfxEntries = 0;
@@ -693,7 +692,7 @@ int SaveAsMDX(const char *filename, mdx_model_t *active_model)
 	mdx_export->header.offsetDummyEnd = pos;	//offsetDummyEnd
 	mdx_export->header.offsetEnd = pos;	//offsetEnd
 
-		
+	//hypov8 todo, check HD and glcommands trailing 0?
 	_write(handle, &mdx_export->header, sizeof(mdx_header_t));//Write header
 	_write(handle, active_model->skins, active_model->header.numSkins*sizeof(mdx_skin_t));//Write skins
 	_write(handle, active_model->triangles, mdx_export->header.numTriangles * sizeof(mdx_triangle_t));//Write Tris
@@ -810,7 +809,7 @@ void BuildGlCmds(md2_model_t *md2)
 //===========
 //StripLength
 //===========
-#if 0
+#if 1
 int StripLength(int starttri, int startv, md2_model_t *md2)
 {
 	int				m1, m2;
@@ -825,10 +824,10 @@ int StripLength(int starttri, int startv, md2_model_t *md2)
 	//	last = &Tris[starttri];
 	last = &md2->triangles[starttri];
 
-	strip_xyz[0] = last->vertexIndices[(startv) % 3];
+	strip_xyz[0] = last->vertexIndices[(startv + 0) % 3];
 	strip_xyz[1] = last->vertexIndices[(startv + 1) % 3];
 	strip_xyz[2] = last->vertexIndices[(startv + 2) % 3];
-	strip_st[0] = last->textureIndices[(startv) % 3];
+	strip_st[0] = last->textureIndices[(startv + 0) % 3];
 	strip_st[1] = last->textureIndices[(startv + 1) % 3];
 	strip_st[2] = last->textureIndices[(startv + 2) % 3];
 

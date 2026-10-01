@@ -1,22 +1,14 @@
-/*#include <io.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#include <stdlib.h>
-#include <string.h> // memset
-#include <math.h>*/ // sqrt
-
 #include <stdio.h>
 #include <mx/gl.h>
 #include "common.h"
-//#include "anorms.h"
+#include "mdx.h"
+#include "md2.h"
 
 
 /*
  * load model
  */
-md2_model_t* md2_readModel (const char *filename, int debugLoad)
+static md2_model_t* md2_readModel (const char *filename, int debugLoad)
 {
 	FILE *file=NULL;
 	md2_model_t *model;
@@ -33,9 +25,6 @@ md2_model_t* md2_readModel (const char *filename, int debugLoad)
 		free (model);
 		return 0;
 	}
-
-	//g_glcmds = 0; /* use glcommands */
-	//g_interp = 1; /* interpolate frames */
 
 	/* initialize model and read header */
 	memset (model, 0, sizeof (md2_model_t));
@@ -185,7 +174,7 @@ md2_model_t* md2_readModel (const char *filename, int debugLoad)
 
 
 //hypov8 convert md2 to mdx compatable
-mdx_model_t * md2_Parse_readModel(const char * filename, int debugLoad)
+mdx_model_t * md2_readModel_to_mdx(const char * filename, int debugLoad)
 {
 	int i;
 	md2_model_t *md2Src;
@@ -257,7 +246,6 @@ mdx_model_t * md2_Parse_readModel(const char * filename, int debugLoad)
 						memcpy(mdxOut->glCommandBuffer, md2Src->glCommandBuffer, sizeof(int) * md2Src->header.numGlCommands);
 
 						mdxOut->isMD2 = 1; //stop reading object index in glCommands
-						//setModelIndex(); //hypov8
 
 						md2_freeModel(md2Src);
 

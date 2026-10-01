@@ -51,7 +51,7 @@ typedef struct
 extern "C" {
 #endif
 
-mdx_model_t *md2_Parse_readModel(const char *filename, int debugLoad);
+mdx_model_t *md2_readModel_to_mdx(const char *filename, int debugLoad);
 void md2_freeModel (md2_model_t *model);
 
 #ifdef __cplusplus
